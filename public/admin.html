@@ -21,9 +21,32 @@
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
         th { background: #1e293b; }
         .highlight { color: #4ade80; font-size: 1.2em; font-weight: bold; }
+        
+        /* ログイン画面用スタイル */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; display: flex; justify-content: center; align-items: center; z-index: 9999;
+        }
+        .login-box {
+            background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); width: 350px; text-align: center;
+        }
+        .login-box input { width: 100%; margin-bottom: 15px; box-sizing: border-box; }
+        .login-box button { width: 100%; }
     </style>
 </head>
 <body>
+    <!-- ログイン認証画面 -->
+    <div id="login-overlay">
+        <div class="login-box">
+            <h3>管理者ログイン</h3>
+            <p style="font-size: 0.85em; color: #94a3b8; margin-bottom: 15px;">IDとパスワードを入力してください</p>
+            <input type="text" id="login-id-input" placeholder="ログインID (メールアドレス)">
+            <input type="password" id="login-pass-input" placeholder="パスワード">
+            <button onclick="checkLogin()" class="btn-success">ログイン</button>
+            <p id="login-error" style="color: #ef4444; font-size: 0.9em; margin-top: 10px; display: none;"></p>
+        </div>
+    </div>
+
     <div class="container">
         <h2>管理者コントロールパネル (Sacho ダッシュボード)</h2>
 
@@ -111,6 +134,26 @@
     </div>
 
     <script>
+        // ログイン認証の処理
+        function checkLogin() {
+            const inputId = document.getElementById('login-id-input').value.trim();
+            const inputPass = document.getElementById('login-pass-input').value.trim();
+            const errorMsg = document.getElementById('login-error');
+
+            if (inputId === 'shogo1134natu@gmail.com' && inputPass === 'ShogoJapan') {
+                document.getElementById('login-overlay').style.display = 'none';
+                // ログイン成功後にデータを読み込む
+                loadSettings();
+                loadClients();
+                loadActiveItem();
+                loadHistory();
+                setInterval(loadActiveItem, 2000);
+            } else {
+                errorMsg.textContent = 'ログインIDまたはパスワードが間違っています。';
+                errorMsg.style.display = 'block';
+            }
+        }
+
         async function loadSettings() {
             try {
                 const res = await fetch('/api/settings');
@@ -262,12 +305,6 @@
             alert(data.message || '次の商品に切り替えました！');
             location.reload();
         }
-
-        loadSettings();
-        loadClients();
-        loadActiveItem();
-        loadHistory();
-        setInterval(loadActiveItem, 2000);
     </script>
 </body>
 </html>
