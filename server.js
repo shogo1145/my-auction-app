@@ -61,6 +61,28 @@ db.serialize(() => {
     db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, memo) VALUES ('#C-501', 'ショウゴ', 'テストユーザー')`);
 });
 
+// ==========================================
+// 画面表示用のルート（道案内）を追加
+// ==========================================
+
+// 1. お客様用のページ（例: index.html または オークション画面）
+app.get('/', (req, res) => {
+    // もしお客様用画面のファイル名が違う場合は、ここのファイル名を合わせてください
+    const indexPath = fs.existsSync(path.join(__dirname, 'オークション.html')) 
+        ? path.join(__dirname, 'オークション.html') 
+        : path.join(__dirname, 'index.html');
+    res.sendFile(indexPath);
+});
+
+// 2. 管理画面（/admin.html）を表示する機能
+app.get('/admin.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// ==========================================
+// 各種APIエンドポイント
+// ==========================================
+
 app.get('/api/clients', (req, res) => {
     db.all(`SELECT * FROM clients`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -130,6 +152,7 @@ app.get('/api/items/export/csv', (req, res) => {
     });
 });
 
+// 3. 管理画面から商品を追加し、自動でDBに保存・お客様画面へ反映させるAPI
 app.post('/api/items', upload.array('itemImages', 5), (req, res) => {
     const { brand, itemCode, itemMemo, cost, startPrice, timerSeconds } = req.body;
     const paths = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
