@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>プライベートオークション 会場</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #0f172a; color: white; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .auction-box { background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); width: 480px; text-align: center; }
+        .brand-name { color: #60a5fa; font-size: 1.1em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        h2 { margin: 0 0 10px 0; color: #f8fafc; font-size: 1.4em; }
+        .item-memo { background: #334155; color: #cbd5e1; padding: 8px 12px; border-radius: 6px; font-size: 0.9em; margin-bottom: 15px; text-align: left; word-break: break-all; }
+        .client-info { color: #94a3b8; font-size: 0.9em; margin-bottom: 10px; }
+        .currency-toggle { margin-bottom: 15px; }
+        .currency-toggle button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; background: #334155; color: #94a3b8; }
+        .currency-toggle button.active { background: #4f46e5; color: white; }
+        .image-container { position: relative; width: 100%; height: 300px; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
+        .image-container img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
+        .image-container img.active { display: block; }
+        .thumbnails { display: flex; gap: 8px; justify-content: center; margin-bottom: 15px; overflow-x: auto; }
+        .thumbnails img { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid transparent; }
+        .thumbnails img.selected { border-color: #4f46e5; }
+        .timer { color: #f87171; font-size: 1.3em; font-weight: bold; margin-bottom: 10px; }
+        .price-display { font-size: 1.8em; font-weight: bold; color: #4ade80; margin-bottom: 10px; }
+        .highest-bidder { color: #cbd5e1; font-size: 0.95em; margin-bottom: 20px; }
+        .bid-buttons { display: flex; gap: 10px; justify-content: center; }
+        .bid-buttons button { flex: 1; padding: 12px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; }
+        .bid-buttons button:hover { background: #4338ca; }
+    </style>
+</head>
+<body>
+    <div class="auction-box">
+        <div class="client-info" id="client-info-text">ログインID: 読み込み中...</div>
+        <div class="currency-toggle">
+            表示通貨: 
+            <button id="btn-jpy" onclick="setCurrency('JPY')">JPY (円)</button>
+            <button id="btn-usd" onclick="setCurrency('USD')" class="active">USD (ドル)</button>
+        </div>
+        
+        <div class="brand-name" id="item-brand">---</div>
+        <h2 id="item-code">商品コード: 読み込み中...</h2>
+        <div class="item-memo" id="item-memo-box" style="display: none;">メモ: <span id="item-memo-text"></span></div>
+        
+        <div class="image-container" id="main-image-container">
+            <p style="color: #64748b;">画像読み込み中...</p>
+        </div>
+        <div class="thumbnails" id="thumbnails-container"></div>
+        
+        <div class="timer" id="timer-display">残り時間: --秒</div>
+        <div class="price-display" id="price-display">--</div>
+        <div class="highest-bidder" id="highest-bidder">最高入札者: ---</div>
+
+        <div class="bid-buttons">
+            <button id="bid-btn-1" onclick="placeBid(step1)">+ $10</button>
+            <button id="bid-btn-2" onclick="placeBid(step2)">+ $100</button>
+            <button id="bid-btn-3" onclick="placeBid(step3)">+ $1000</button>
+        </div>
+    </div>
+
+    <script>
+        let currentClient = null;
+        let currentCurrency = 'USD';
+        let exchangeRate = 150;
+        let currentItem = null;
+        let remainingSeconds = 180;
+        let timerInterval = null;
+
+        const step1 = 10;
+        const step2 = 100;
+        const step3 = 1000;
+
+        const savedClient = localStorage.getItem('auctionClient');
+        if (!savedClient) {
+            alert('ログインしてください。');
+            location.href = 'index.html';
+        } else {
+            currentClient = JSON.parse(savedClient);
+            document.getElementById('client-info-text').textContent = `ログインID: ${currentClient.client_id} (${currentClient.client_name})`;
+        }
+
+        async function fetchSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                exchangeRate = Number(data.exchangeRate) || 150;
+                updateButtonLabels();
+                updatePriceDisplay();
+            } catch(e) {}
+        }
+
+        function setCurrency(curr) {
+            currentCurrency = curr;
+            document.getElementById('btn-jpy').classList.toggle('active', curr === 'JPY');
+            document.getElementById('btn-usd').classList.toggle('active', curr === 'USD');
+            updatePriceDisplay();
+            updateButtonLabels();
+        }
+
+        function updateButtonLabels() {
+            const btn1 = document.getElementById('bid-btn-1');
+            const btn2 = document.getElementById('bid-btn-2');
+            const btn3 = document.getElementById('bid-btn-3');
+
+            if (currentCurrency === 'USD') {
+                btn1.textContent = `+ $${step1}`;
+                btn2.textContent = `+ $${step2}`;
+                btn3.textContent = `+ $${step3}`;
+            } else {
+                const yen1 = step1 * exchangeRate;
+                const yen2 = step2 * exchangeRate;
+                const yen3 = step3 * exchangeRate;
+                btn1.textContent = `+ ¥${yen1.toLocaleString()}`;
+                btn2.textContent = `+ ¥${yen2.toLocaleString()}`;
+                btn3.textContent = `+ ¥${yen3.toLocaleString()}`;
+            }
+        }
+
+        let lastItemId = null;
+
+        async function pollActiveItem() {
+            try {
+                await fetchSettings();
+                const res = await fetch('/api/items/active');
+                const item = await res.json();
+                
+                if (item && item.id) {
+                    document.getElementById('item-brand').textContent = item.brand || '';
+                    document.getElementById('item-code').textContent = `商品コード: ${item.item_code}`;
+                    
+                    const memoBox = document.getElementById('item-memo-box');
+                    if (item.item_memo && item.item_memo.trim() !== '') {
+                        document.getElementById('item-memo-text').textContent = item.item_memo;
+                        memoBox.style.display = 'block';
+                    } else {
+                        memoBox.style.display = 'none';
+                    }
+                    
+                    if (lastItemId !== item.id) {
+                        lastItemId = item.id;
+                        remainingSeconds = item.timer_seconds || 180;
+                        startTimer();
+                    }
+
+                    currentItem = item;
+                    updatePriceDisplay();
+                    document.getElementById('highest-bidder').textContent = `最高入札者: ${item.highest_bidder}`;
+
+                    updateImages(item.image_urls);
+                } else {
+                    document.getElementById('item-brand').textContent = '---';
+                    document.getElementById('item-code').textContent = '現在出品中の商品はありません';
+                    document.getElementById('item-memo-box').style.display = 'none';
+                    document.getElementById('price-display').textContent = '---';
+                    document.getElementById('highest-bidder').textContent = '最高入札者: ---';
+                    document.getElementById('main-image-container').innerHTML = '<p style="color: #64748b;">待機中</p>';
+                    document.getElementById('thumbnails-container').innerHTML = '';
+                    document.getElementById('timer-display').textContent = '残り時間: --秒';
+                }
+            } catch(e) {}
+        }
+
+        function updateImages(urlsJson) {
+            try {
+                const urls = JSON.parse(urlsJson || '[]');
+                const mainContainer = document.getElementById('main-image-container');
+                const thumbContainer = document.getElementById('thumbnails-container');
+                
+                if (urls.length === 0) {
+                    mainContainer.innerHTML = '<p style="color: #64748b;">画像なし</p>';
+                    thumbContainer.innerHTML = '';
+                    return;
+                }
+
+                if (mainContainer.dataset.loadedIds !== urls.join(',')) {
+                    mainContainer.dataset.loadedIds = urls.join(',');
+                    mainContainer.innerHTML = '';
+                    thumbContainer.innerHTML = '';
+
+                    urls.forEach((url, index) => {
+                        const img = document.createElement('img');
+                        img.src = url;
+                        if (index === 0) img.classList.add('active');
+                        img.id = `main-img-${index}`;
+                        mainContainer.appendChild(img);
+
+                        const thumb = document.createElement('img');
+                        thumb.src = url;
+                        if (index === 0) thumb.classList.add('selected');
+                        thumb.onclick = () => {
+                            document.querySelectorAll('.image-container img').forEach(i => i.classList.remove('active'));
+                            document.querySelectorAll('.thumbnails img').forEach(t => t.classList.remove('selected'));
+                            img.classList.add('active');
+                            thumb.classList.add('selected');
+                        };
+                        thumbContainer.appendChild(thumb);
+                    });
+                }
+            } catch(e) {}
+        }
+
+        function updatePriceDisplay() {
+            if (!currentItem) return;
+            const currentBidYen = currentItem.current_bid || 0;
+            const displayEl = document.getElementById('price-display');
+
+            if (currentCurrency === 'USD') {
+                const usdVal = (currentBidYen / exchangeRate).toFixed(2);
+                displayEl.textContent = `$${usdVal} USD`;
+            } else {
+                displayEl.textContent = `${currentBidYen.toLocaleString()} 円`;
+            }
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (remainingSeconds > 0) {
+                    remainingSeconds--;
+                    document.getElementById('timer-display').textContent = `残り時間: ${remainingSeconds}秒`;
+                } else {
+                    document.getElementById('timer-display').textContent = '残り時間: 終了';
+                }
+            }, 1000);
+        }
+
+        async function placeBid(amountUSD) {
+            if (!currentItem) return;
+            const amountYen = Math.round(amountUSD * exchangeRate);
+
+            try {
+                const res = await fetch('/api/bid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        itemId: currentItem.id,
+                        amount: amountYen,
+                        clientId: currentClient.client_id
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    currentItem.current_bid = data.currentBid;
+                    currentItem.highest_bidder = data.highestBidder;
+                    updatePriceDisplay();
+                    document.getElementById('highest-bidder').textContent = `最高入札者: ${data.highestBidder}`;
+                } else {
+                    alert(data.message || '入札に失敗しました。');
+                }
+            } catch (err) {
+                alert('通信エラーが発生しました。');
+            }
+        }
+
+        async function init() {
+            await fetchSettings();
+            pollActiveItem();
+            setInterval(pollActiveItem, 2000);
+        }
+
+        init();
+    </script>
+</body>
+</html>

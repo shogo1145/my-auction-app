@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>管理者コントロールパネル (Sacho ダッシュボード)</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #1e293b; color: #f8fafc; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h2, h3 { border-bottom: 2px solid #334155; padding-bottom: 8px; }
+        .panel { background: #0f172a; padding: 20px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .form-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; align-items: center; }
+        input, select, textarea { padding: 10px; border-radius: 4px; border: 1px solid #475569; background: #1e293b; color: white; flex-grow: 1; }
+        input[type="file"] { padding: 6px; background: #334155; }
+        button { padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #4338ca; }
+        button.btn-danger { background: #ef4444; }
+        button.btn-danger:hover { background: #dc2626; }
+        button.btn-success { background: #10b981; }
+        button.btn-success:hover { background: #059669; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
+        th { background: #1e293b; }
+        .highlight { color: #4ade80; font-size: 1.2em; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>管理者コントロールパネル (Sacho ダッシュボード)</h2>
+
+        <!-- 為替レート設定パネル -->
+        <div class="panel">
+            <h3>為替レート設定 (1 USD あたりの JPY)</h3>
+            <div class="form-group">
+                <input type="number" id="exchange-rate-input" placeholder="例: 150">
+                <button onclick="updateExchangeRate()" class="btn-success">レートを保存</button>
+            </div>
+        </div>
+
+        <!-- アクティブアイテム＆次へ進めるパネル -->
+        <div class="panel">
+            <h3>現在の出品中アイテムコントロール</h3>
+            <p>ブランド名：<span id="mon-item-brand" style="color: #60a5fa; font-weight: bold;">---</span></p>
+            <p>商品コード：<span id="mon-item-code">---</span></p>
+            <p>メモ：<span id="mon-item-memo" style="color: #cbd5e1;">---</span></p>
+            <p>原価：<span id="mon-item-cost">---</span> JPY</p>
+            <p>開始価格：<span id="mon-item-start">---</span> JPY</p>
+            <p>現在の入札額：<span id="mon-current-bid" class="highlight">0円</span></p>
+            <p>最高入札者（ID）：<span id="mon-highest-bidder">---</span></p>
+            <button onclick="nextItem()" class="btn-success" style="margin-top: 15px;">▶ 次の商品へ切り替える（現在の出品を終了）</button>
+        </div>
+
+        <!-- 新規商品出品パネル -->
+        <div class="panel">
+            <h3>新規商品出品（ストック追加）</h3>
+            <form id="add-item-form" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                <div class="form-group" style="margin-top:0;">
+                    <input type="text" id="item-brand" placeholder="ブランド名 (例: CHANEL)" required style="flex-basis: 200px;">
+                    <input type="text" id="item-code" placeholder="商品コード (例: CH-001)" required style="flex-basis: 200px;">
+                    <input type="number" id="item-cost" placeholder="原価 (JPY)" required style="flex-basis: 120px;">
+                    <input type="number" id="item-start-price" placeholder="開始価格 (JPY)" required style="flex-basis: 120px;">
+                </div>
+                <div class="form-group" style="margin-top:0;">
+                    <input type="text" id="item-memo" placeholder="商品メモ（お客様画面にも表示されます）" style="flex-grow: 2;">
+                    <input type="number" id="item-timer" placeholder="制限時間(秒)" value="180" style="max-width: 120px;">
+                </div>
+                <div class="form-group" style="margin-top:0;">
+                    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 4px;">
+                        <label style="font-size: 0.85em; color: #94a3b8;">商品写真（最大5枚選択可）</label>
+                        <input type="file" id="item-image-files" accept="image/*" multiple required>
+                    </div>
+                </div>
+                <button type="submit" style="width: 100%; margin-top: 5px;">出品ストックに追加する</button>
+            </form>
+        </div>
+
+        <!-- 過去の出品・落札履歴 -->
+        <div class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="border:none; margin:0; padding:0;">過去の出品＆落札履歴</h3>
+                <button onclick="location.href='/api/items/export/csv'" class="btn-success" style="padding: 6px 14px; font-size: 0.9em;">📥 履歴をCSVダウンロード (Excel対応)</button>
+            </div>
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>ブランド</th><th>商品コード</th><th>メモ</th><th>原価</th><th>開始価格</th><th>落札価格</th><th>最高落札者</th><th>ステータス</th></tr>
+                </thead>
+                <tbody id="history-table-body"></tbody>
+            </table>
+        </div>
+
+        <!-- 新規顧客登録パネル -->
+        <div class="panel">
+            <h3>新規クライアント追加</h3>
+            <form id="add-client-form" class="form-group">
+                <input type="text" id="new-client-id" placeholder="ランダムID (例: #C-105)" required>
+                <input type="text" id="new-client-name" placeholder="クライアント名" required>
+                <input type="text" id="new-client-memo" placeholder="メモ/連絡先">
+                <button type="submit">追加する</button>
+            </form>
+        </div>
+
+        <!-- 顧客マッピングリスト＆編集パネル -->
+        <div class="panel">
+            <h3>顧客マッピングリスト（編集・削除可能）</h3>
+            <table>
+                <thead>
+                    <tr><th>ランダムID</th><th>クライアント名</th><th>メモ/連絡先</th><th>操作</th></tr>
+                </thead>
+                <tbody id="client-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                document.getElementById('exchange-rate-input').value = data.exchangeRate;
+            } catch(e) {}
+        }
+
+        async function updateExchangeRate() {
+            const rate = document.getElementById('exchange-rate-input').value;
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exchangeRate: rate })
+            });
+            if ((await res.json()).success) alert('為替レートを更新しました！');
+        }
+
+        async function loadClients() {
+            const res = await fetch('/api/clients');
+            const clients = await res.json();
+            const tbody = document.getElementById('client-table-body');
+            tbody.innerHTML = '';
+            clients.forEach(c => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><input type="text" id="edit-cid-${c.id}" value="${c.client_id}" style="width:90px;"></td>
+                        <td><input type="text" id="edit-cname-${c.id}" value="${c.client_name}"></td>
+                        <td><input type="text" id="edit-cmemo-${c.id}" value="${c.memo || ''}"></td>
+                        <td>
+                            <button onclick="updateClient(${c.id})" class="btn-success" style="padding:5px 10px; font-size:0.8em;">保存</button>
+                            <button onclick="deleteClient(${c.id})" class="btn-danger" style="padding:5px 10px; font-size:0.8em;">削除</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        async function updateClient(id) {
+            const res = await fetch(`/api/clients/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clientId: document.getElementById(`edit-cid-${id}`).value,
+                    clientName: document.getElementById(`edit-cname-${id}`).value,
+                    memo: document.getElementById(`edit-cmemo-${id}`).value
+                })
+            });
+            if ((await res.json()).success) { alert('更新しました！'); loadClients(); }
+        }
+
+        async function deleteClient(id) {
+            if(!confirm('本当に削除しますか？')) return;
+            const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' });
+            if ((await res.json()).success) { alert('削除しました！'); loadClients(); }
+        }
+
+        document.getElementById('add-client-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const res = await fetch('/api/clients', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clientId: document.getElementById('new-client-id').value,
+                    clientName: document.getElementById('new-client-name').value,
+                    memo: document.getElementById('new-client-memo').value
+                })
+            });
+            const data = await res.json();
+            if (data.success) { alert('追加しました！'); location.reload(); }
+            else { alert('エラー: ' + (data.error || '追加に失敗しました')); }
+        });
+
+        document.getElementById('add-item-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('brand', document.getElementById('item-brand').value);
+            formData.append('itemCode', document.getElementById('item-code').value);
+            formData.append('itemMemo', document.getElementById('item-memo').value);
+            formData.append('cost', document.getElementById('item-cost').value);
+            formData.append('startPrice', document.getElementById('item-start-price').value);
+            formData.append('timerSeconds', document.getElementById('item-timer').value);
+            
+            const fileInput = document.getElementById('item-image-files');
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('itemImages', fileInput.files[i]);
+            }
+
+            try {
+                const res = await fetch('/api/items', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    alert('ストックに出品しました！');
+                    location.reload();
+                } else {
+                    alert('出品エラーが発生しました。');
+                }
+            } catch (err) {
+                alert('通信エラーが発生しました。');
+            }
+        });
+
+        async function loadActiveItem() {
+            try {
+                const res = await fetch('/api/items/active');
+                const item = await res.json();
+                if (item && item.item_code) {
+                    document.getElementById('mon-item-brand').textContent = item.brand || '---';
+                    document.getElementById('mon-item-code').textContent = item.item_code;
+                    document.getElementById('mon-item-memo').textContent = item.item_memo || '（なし）';
+                    document.getElementById('mon-item-cost').textContent = item.cost;
+                    document.getElementById('mon-item-start').textContent = item.start_price || 0;
+                    document.getElementById('mon-current-bid').textContent = (item.current_bid || 0).toLocaleString() + '円';
+                    document.getElementById('mon-highest-bidder').textContent = item.highest_bidder;
+                } else {
+                    document.getElementById('mon-item-brand').textContent = '---';
+                    document.getElementById('mon-item-code').textContent = 'アクティブな商品なし（待機中）';
+                    document.getElementById('mon-item-memo').textContent = '---';
+                }
+            } catch(e) {}
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/items');
+                const items = await res.json();
+                const tbody = document.getElementById('history-table-body');
+                tbody.innerHTML = '';
+                items.forEach(i => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${i.id}</td>
+                            <td>${i.brand || ''}</td>
+                            <td>${i.item_code}</td>
+                            <td>${i.item_memo || ''}</td>
+                            <td>${i.cost} JPY</td>
+                            <td>${i.start_price || 0} JPY</td>
+                            <td style="color:#4ade80; font-weight:bold;">${i.current_bid}円</td>
+                            <td>${i.highest_bidder}</td>
+                            <td>${i.status}</td>
+                        </tr>`;
+                });
+            } catch(e) {}
+        }
+
+        async function nextItem() {
+            if(!confirm('次の商品に切り替えますか？')) return;
+            const res = await fetch('/api/items/next', { method: 'POST' });
+            const data = await res.json();
+            alert(data.message || '次の商品に切り替えました！');
+            location.reload();
+        }
+
+        loadSettings();
+        loadClients();
+        loadActiveItem();
+        loadHistory();
+        setInterval(loadActiveItem, 2000);
+    </script>
+</body>
+</html>
