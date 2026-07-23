@@ -582,6 +582,17 @@
 
         async function placeBid(amountUSD) {
             if (!currentItem) return;
+
+            // クライアントIDを安全に抽出（オブジェクトの階層違いや文字列直指定に対応）
+            const clientIdToSend = (typeof currentClient === 'string') 
+                ? currentClient 
+                : (currentClient.client_id || currentClient.clientId || currentClient.id);
+
+            if (!clientIdToSend) {
+                alert('クライアント情報が確認できません。再ログインしてください。');
+                return;
+            }
+
             const amountYen = Math.round(amountUSD * exchangeRate);
 
             try {
@@ -591,7 +602,7 @@
                     body: JSON.stringify({
                         itemId: currentItem.id,
                         amount: amountYen,
-                        clientId: currentClient.client_id
+                        clientId: clientIdToSend
                     })
                 });
                 const data = await res.json();
@@ -621,7 +632,8 @@
         async function loadMyPurchases() {
             if (!currentClient) return;
             try {
-                const res = await fetch(`/api/my-purchases?clientId=${encodeURIComponent(currentClient.client_id)}`);
+                const clientIdToSend = (typeof currentClient === 'string') ? currentClient : (currentClient.client_id || currentClient.clientId || currentClient.id);
+                const res = await fetch(`/api/my-purchases?clientId=${encodeURIComponent(clientIdToSend)}`);
                 const items = await res.json();
                 const gridEl = document.getElementById('purchases-grid');
 
