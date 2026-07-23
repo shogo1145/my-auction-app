@@ -124,7 +124,7 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// 初回パスワード設定API
+// 初回パスワード設定API（従来版）
 app.post('/api/set-password', (req, res) => {
     const { clientId, password } = req.body;
     
@@ -164,6 +164,46 @@ app.post('/api/set-password', (req, res) => {
     });
 });
 
+// ★【新規追加】初回パスワード＆秘密の合言葉の同時設定API
+app.post('/api/set-password-with-secret', (req, res) => {
+    const { clientId, password, secretWord } = req.body;
+    
+    if (!clientId || !password || !secretWord) {
+        return res.status(400).json({ success: false, message: 'すべての項目を入力してください。' });
+    }
+
+    db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
+        }
+        if (!row) {
+            return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
+        }
+
+        if (row.password && row.password !== 'password123' && row.password !== '') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'すでに独自のパスワードが設定されています。「パスワードを忘れた場合」から合言葉で再設定してください。' 
+            });
+        }
+
+        db.run(`UPDATE clients SET password = ?, secret_word = ? WHERE client_id = ?`, [password, secretWord, clientId], function(err) {
+            if (err) {
+                return res.status(500).json({ success: false, message: '設定の保存に失敗しました。' });
+            }
+            res.json({ 
+                success: true, 
+                message: 'パスワードと秘密の合言葉が正常に設定されました。',
+                client: {
+                    client_id: row.client_id,
+                    client_name: row.client_name,
+                    memo: row.memo
+                }
+            });
+        });
+    });
+});
+
 // 合言葉によるパスワード再設定API
 app.post('/api/reset-password-by-secret', (req, res) => {
     const { clientId, secretWord, newPassword } = req.body;
@@ -180,12 +220,10 @@ app.post('/api/reset-password-by-secret', (req, res) => {
             return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
         }
 
-        // 合言葉の照合（大文字小文字を区別しない場合は .toLowerCase() 等で調整可能ですが、厳密一致）
         if (!row.secret_word || row.secret_word.trim() !== secretWord.trim()) {
             return res.status(400).json({ success: false, message: '秘密の合言葉が一致しません。' });
         }
 
-        // パスワードを新しいものに強制更新
         db.run(`UPDATE clients SET password = ? WHERE client_id = ?`, [newPassword, clientId], function(err) {
             if (err) {
                 return res.status(500).json({ success: false, message: 'パスワードの更新に失敗しました。' });
