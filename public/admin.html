@@ -567,7 +567,7 @@
                 tbody.innerHTML = '';
                 items.forEach(i => {
                     tbody.innerHTML += `
-                        <tr>
+                        <tr data-history-id="${i.id}">
                             <td><strong>${i.id}</strong></td>
                             <td><input type="text" id="edit-brand-${i.id}" value="${i.brand || ''}" class="history-input"></td>
                             <td><input type="text" id="edit-code-${i.id}" value="${i.item_code || ''}" class="history-input"></td>
