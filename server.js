@@ -34,8 +34,14 @@ db.serialize(() => {
         client_id TEXT UNIQUE,
         client_name TEXT,
         password TEXT,
+        secret_word TEXT DEFAULT 'chanel',
         memo TEXT
     )`);
+
+    // 既存テーブルに secret_word カラムがない場合の保険（自動追加）
+    db.run(`ALTER TABLE clients ADD COLUMN secret_word TEXT DEFAULT 'chanel'`, (err) => {
+        // すでにカラムが存在する場合はエラーになるが無視してOK
+    });
 
     db.run(`CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,9 +71,9 @@ db.serialize(() => {
     )`);
     db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('exchange_rate', '150')`);
 
-    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#A-108', 'ジョン・スミス', 'password123', 'WhatsApp / DHL')`);
-    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#B-402', 'エリカ・ワン', 'password123', 'WeChat / 銀行振込')`);
-    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#C-501', 'ショウゴ', 'password123', 'テストユーザー')`);
+    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, secret_word, memo) VALUES ('#A-108', 'ジョン・スミス', 'password123', 'hermes', 'WhatsApp / DHL')`);
+    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, secret_word, memo) VALUES ('#B-402', 'エリカ・ワン', 'password123', 'louisvuitton', 'WeChat / 銀行振込')`);
+    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, secret_word, memo) VALUES ('#C-501', 'ショウゴ', 'password123', 'chanel', 'テストユーザー')`);
 });
 
 // ==========================================
@@ -118,7 +124,7 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// お客さん自身によるパスワード新規設定・変更API（セキュリティ強化版）
+// 初回パスワード設定API
 app.post('/api/set-password', (req, res) => {
     const { clientId, password } = req.body;
     
@@ -134,17 +140,13 @@ app.post('/api/set-password', (req, res) => {
             return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
         }
 
-        // セキュリティガード:
-        // すでに「初期値（password123）」以外のパスワードが設定されている場合、
-        // 誰でも勝手にボタン一つで上書きできないようにする（変更時は現在のパスワード確認、または管理者によるリセットを促す）
         if (row.password && row.password !== 'password123' && row.password !== '') {
             return res.status(400).json({ 
                 success: false, 
-                message: 'このIDにはすでに独自のパスワードが設定されています。変更・再設定が必要な場合は管理者にお問い合わせください。' 
+                message: 'すでに独自のパスワードが設定されています。「パスワードを忘れた場合」から合言葉で再設定してください。' 
             });
         }
 
-        // 初回設定または初期値のままである場合のみ、新しいパスワードへの設定を許可する
         db.run(`UPDATE clients SET password = ? WHERE client_id = ?`, [password, clientId], function(err) {
             if (err) {
                 return res.status(500).json({ success: false, message: 'パスワードの設定に失敗しました。' });
@@ -162,6 +164,37 @@ app.post('/api/set-password', (req, res) => {
     });
 });
 
+// 合言葉によるパスワード再設定API
+app.post('/api/reset-password-by-secret', (req, res) => {
+    const { clientId, secretWord, newPassword } = req.body;
+
+    if (!clientId || !secretWord || !newPassword) {
+        return res.status(400).json({ success: false, message: 'すべての項目を入力してください。' });
+    }
+
+    db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
+        }
+        if (!row) {
+            return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
+        }
+
+        // 合言葉の照合（大文字小文字を区別しない場合は .toLowerCase() 等で調整可能ですが、厳密一致）
+        if (!row.secret_word || row.secret_word.trim() !== secretWord.trim()) {
+            return res.status(400).json({ success: false, message: '秘密の合言葉が一致しません。' });
+        }
+
+        // パスワードを新しいものに強制更新
+        db.run(`UPDATE clients SET password = ? WHERE client_id = ?`, [newPassword, clientId], function(err) {
+            if (err) {
+                return res.status(500).json({ success: false, message: 'パスワードの更新に失敗しました。' });
+            }
+            res.json({ success: true, message: 'パスワードが再設定されました。' });
+        });
+    });
+});
+
 app.get('/api/clients', (req, res) => {
     db.all(`SELECT * FROM clients`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -170,16 +203,18 @@ app.get('/api/clients', (req, res) => {
 });
 
 app.post('/api/clients', (req, res) => {
-    const { clientId, clientName, password, memo } = req.body;
-    db.run(`INSERT INTO clients (client_id, client_name, password, memo) VALUES (?, ?, ?, ?)`, [clientId, clientName, password || 'password123', memo], function(err) {
+    const { clientId, clientName, password, secretWord, memo } = req.body;
+    db.run(`INSERT INTO clients (client_id, client_name, password, secret_word, memo) VALUES (?, ?, ?, ?, ?)`, 
+        [clientId, clientName, password || 'password123', secretWord || 'chanel', memo], function(err) {
         if (err) return res.status(500).json({ success: false, error: err.message });
         res.json({ success: true, id: this.lastID });
     });
 });
 
 app.put('/api/clients/:id', (req, res) => {
-    const { clientId, clientName, memo } = req.body;
-    db.run(`UPDATE clients SET client_id = ?, client_name = ?, memo = ? WHERE id = ?`, [clientId, clientName, memo, req.params.id], function(err) {
+    const { clientId, clientName, secretWord, memo } = req.body;
+    db.run(`UPDATE clients SET client_id = ?, client_name = ?, secret_word = ?, memo = ? WHERE id = ?`, 
+        [clientId, clientName, secretWord, memo, req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
