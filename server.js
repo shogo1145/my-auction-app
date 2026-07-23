@@ -284,12 +284,11 @@ app.post('/api/items/next', (req, res) => {
     });
 });
 
-// ★タイマー終了時にクライアントから自動で次へ進めるためのエンドポイント
+// タイマー終了時にクライアントから自動で次へ進めるためのエンドポイント
 app.post('/api/items/check-and-next', (req, res) => {
     const { itemId } = req.body;
     db.get(`SELECT * FROM items WHERE id = ?`, [itemId], (err, item) => {
         if (err || !item) return res.json({ success: false });
-        // すでにactiveでなくfinishedになっている等、または時間経過などのチェック
         if (item.status === 'active') {
             db.run(`UPDATE items SET status = 'finished' WHERE id = ?`, [itemId], () => {
                 db.get(`SELECT id, start_price FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, nextRow) => {
