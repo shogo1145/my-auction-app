@@ -29,10 +29,12 @@ const db = new sqlite3.Database('./auction.db', (err) => {
 });
 
 db.serialize(() => {
+    // 1. clients テーブルに password カラムを追加
     db.run(`CREATE TABLE IF NOT EXISTS clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         client_id TEXT UNIQUE,
         client_name TEXT,
+        password TEXT,
         memo TEXT
     )`);
 
@@ -64,9 +66,10 @@ db.serialize(() => {
     )`);
     db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('exchange_rate', '150')`);
 
-    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, memo) VALUES ('#A-108', 'ジョン・スミス', 'WhatsApp / DHL')`);
-    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, memo) VALUES ('#B-402', 'エリカ・ワン', 'WeChat / 銀行振込')`);
-    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, memo) VALUES ('#C-501', 'ショウゴ', 'テストユーザー')`);
+    // 2. 初期データにパスワードを追加 (例としてすべて 'password123' に設定)
+    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#A-108', 'ジョン・スミス', 'password123', 'WhatsApp / DHL')`);
+    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#B-402', 'エリカ・ワン', 'password123', 'WeChat / 銀行振込')`);
+    db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#C-501', 'ショウゴ', 'password123', 'テストユーザー')`);
 });
 
 // ==========================================
@@ -88,7 +91,7 @@ app.get('/admin.html', (req, res) => {
 // 各種APIエンドポイント
 // ==========================================
 
-// クライアントのログイン（認証）API
+// 3. クライアントのログイン（認証）APIの修正（パスワード検証を追加）
 app.post('/api/login', (req, res) => {
     const { clientId, password } = req.body;
     
@@ -99,6 +102,11 @@ app.post('/api/login', (req, res) => {
         
         if (!row) {
             return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
+        }
+
+        // パスワードの突合チェック（パスワードが登録されている場合は比較する）
+        if (row.password && row.password !== password) {
+            return res.status(400).json({ success: false, message: 'パスワードが間違っています。' });
         }
 
         res.json({ 
@@ -121,8 +129,8 @@ app.get('/api/clients', (req, res) => {
 });
 
 app.post('/api/clients', (req, res) => {
-    const { clientId, clientName, memo } = req.body;
-    db.run(`INSERT INTO clients (client_id, client_name, memo) VALUES (?, ?, ?)`, [clientId, clientName, memo], function(err) {
+    const { clientId, clientName, password, memo } = req.body;
+    db.run(`INSERT INTO clients (client_id, client_name, password, memo) VALUES (?, ?, ?, ?)`, [clientId, clientName, password || 'password123', memo], function(err) {
         if (err) return res.status(500).json({ success: false, error: err.message });
         res.json({ success: true, id: this.lastID });
     });
@@ -165,7 +173,6 @@ app.get('/api/items', (req, res) => {
     });
 });
 
-// 商品情報の更新（過去履歴の修正用API）
 app.put('/api/items/:id', (req, res) => {
     const { brand, itemCode, itemMemo, cost, startPrice, currentBid, highestBidder, status } = req.body;
     db.run(`UPDATE items SET brand = ?, item_code = ?, item_memo = ?, cost = ?, start_price = ?, current_bid = ?, highest_bidder = ?, status = ? WHERE id = ?`,
@@ -177,7 +184,6 @@ app.put('/api/items/:id', (req, res) => {
     );
 });
 
-// 商品情報の削除API
 app.delete('/api/items/:id', (req, res) => {
     db.run(`DELETE FROM items WHERE id = ?`, [req.params.id], function(err) {
         if (err) return res.status(500).json({ success: false, error: err.message });
@@ -247,8 +253,8 @@ app.post('/api/bid', (req, res) => {
     db.get(`SELECT * FROM items WHERE id = ? AND status = 'active'`, [itemId], (err, item) => {
         if (err || !item) return res.status(500).json({ success: false, message: 'アクティブな商品ではありません。' });
 
-        const addAmount = Number(amount);
-        const newBid = item.current_bid + addAmount;
+        const addAmount = Number(addAmount = Number(amount)); // ※修正
+        const newBid = item.current_bid + Number(amount);
         db.run(`UPDATE items SET current_bid = ?, highest_bidder = ? WHERE id = ?`, [newBid, clientId, itemId], function(err) {
             if (err) return res.status(500).json({ success: false, message: err.message });
 
