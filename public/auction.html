@@ -594,6 +594,15 @@
                 const winBanner = document.getElementById('win-banner');
 
                 if (item && item.id) {
+                    // ★修正ポイント: 商品IDが切り替わった場合（次の商品に進んだ場合）に、画面の状態や入札履歴キャッシュを自動リセット
+                    if (lastItemId !== item.id) {
+                        lastItemId = item.id;
+                        remainingSeconds = item.timer_seconds || 180;
+                        knownBidIds.clear(); // 前の商品の入札履歴IDをクリア
+                        document.getElementById('bid-feed-list').innerHTML = `<p style="color:var(--text-muted); font-size:0.85em; text-align:center; padding-top:20px;">${dict[currentLang].loadingBids}</p>`;
+                        startTimer();
+                    }
+
                     document.getElementById('item-brand').textContent = item.brand || 'EXCLUSIVE ITEM';
                     document.getElementById('item-code').textContent = `${item.item_code}`;
                     
@@ -603,12 +612,6 @@
                         memoBox.style.display = 'block';
                     } else {
                         memoBox.style.display = 'none';
-                    }
-                    
-                    if (lastItemId !== item.id) {
-                        lastItemId = item.id;
-                        remainingSeconds = item.timer_seconds || 180;
-                        startTimer();
                     }
 
                     currentItem = item;
