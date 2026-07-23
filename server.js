@@ -105,8 +105,8 @@ app.post('/api/login', (req, res) => {
             success: true, 
             message: 'ログインに成功しました。',
             client: {
-                clientId: row.client_id,
-                clientName: row.client_name,
+                client_id: row.client_id,
+                client_name: row.client_name,
                 memo: row.memo
             }
         });
