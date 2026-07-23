@@ -594,11 +594,10 @@
                 const winBanner = document.getElementById('win-banner');
 
                 if (item && item.id) {
-                    // ★修正ポイント: 商品IDが切り替わった場合（次の商品に進んだ場合）に、画面の状態や入札履歴キャッシュを自動リセット
                     if (lastItemId !== item.id) {
                         lastItemId = item.id;
                         remainingSeconds = item.timer_seconds || 180;
-                        knownBidIds.clear(); // 前の商品の入札履歴IDをクリア
+                        knownBidIds.clear();
                         document.getElementById('bid-feed-list').innerHTML = `<p style="color:var(--text-muted); font-size:0.85em; text-align:center; padding-top:20px;">${dict[currentLang].loadingBids}</p>`;
                         startTimer();
                     }
@@ -620,7 +619,6 @@
 
                     updateImages(item.image_urls);
 
-                    // オークション終了時かつ自分が最高落札者の場合の祝福UI表示判定
                     const clientIdToCheck = (typeof currentClient === 'string') ? currentClient : (currentClient.client_id || currentClient.clientId || currentClient.id);
                     if (item.status === 'finished' && item.highest_bidder === clientIdToCheck) {
                         winBanner.style.display = 'block';
@@ -739,13 +737,24 @@
 
         function startTimer() {
             if (timerInterval) clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
+            timerInterval = setInterval(async () => {
                 const timerEl = document.getElementById('timer-display');
                 if (remainingSeconds > 0) {
                     remainingSeconds--;
                     const mins = Math.floor(remainingSeconds / 60);
                     const secs = remainingSeconds % 60;
                     timerEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    
+                    // タイマーが0秒になった瞬間にサーバーへ終了＆次への移行をリクエスト
+                    if (remainingSeconds === 0 && currentItem) {
+                        try {
+                            await fetch('/api/items/check-and-next', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ itemId: currentItem.id })
+                            });
+                        } catch(e) {}
+                    }
                 } else {
                     timerEl.textContent = 'CLOSED';
                 }
