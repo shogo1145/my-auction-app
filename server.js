@@ -284,6 +284,30 @@ app.post('/api/items/next', (req, res) => {
     });
 });
 
+// ★タイマー終了時にクライアントから自動で次へ進めるためのエンドポイント
+app.post('/api/items/check-and-next', (req, res) => {
+    const { itemId } = req.body;
+    db.get(`SELECT * FROM items WHERE id = ?`, [itemId], (err, item) => {
+        if (err || !item) return res.json({ success: false });
+        // すでにactiveでなくfinishedになっている等、または時間経過などのチェック
+        if (item.status === 'active') {
+            db.run(`UPDATE items SET status = 'finished' WHERE id = ?`, [itemId], () => {
+                db.get(`SELECT id, start_price FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, nextRow) => {
+                    if (nextRow) {
+                        db.run(`UPDATE items SET status = 'active', current_bid = COALESCE(NULLIF(current_bid, 0), start_price) WHERE id = ?`, [nextRow.id], () => {
+                            res.json({ success: true, transitioned: true, nextId: nextRow.id });
+                        });
+                    } else {
+                        res.json({ success: true, transitioned: true, nextId: null });
+                    }
+                });
+            });
+        } else {
+            res.json({ success: true, transitioned: false });
+        }
+    });
+});
+
 app.post('/api/bid', (req, res) => {
     const { itemId, amount, clientId } = req.body;
     db.get(`SELECT * FROM items WHERE id = ? AND status = 'active'`, [itemId], (err, item) => {
