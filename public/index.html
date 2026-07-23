@@ -152,7 +152,7 @@
             letter-spacing: 0.05em;
         }
 
-        /* モーダルスタイル（パスワード忘れ・救済用） */
+        /* モーダルスタイル（合言葉による再設定用） */
         .modal {
             display: none;
             position: fixed;
@@ -168,14 +168,14 @@
             border: 1px solid var(--gold-primary);
             padding: 30px;
             border-radius: 8px;
-            max-width: 400px;
+            max-width: 420px;
             width: 100%;
             text-align: left;
             position: relative;
         }
         .modal-content h3 {
             color: var(--gold-primary);
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             font-size: 1.2em;
         }
         .modal-content p {
@@ -183,6 +183,16 @@
             color: var(--text-secondary);
             margin-bottom: 20px;
             line-height: 1.5;
+        }
+        .modal-error {
+            background: rgba(244, 63, 94, 0.08);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            color: var(--rose-red);
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-bottom: 15px;
+            display: none;
         }
         .close-modal {
             position: absolute;
@@ -222,14 +232,14 @@
                     <span>サロンに入室する</span>
                 </button>
 
-                <!-- パスワードを新規設定・変更するボタン -->
+                <!-- 初回パスワード設定ボタン -->
                 <button type="button" class="alt-btn" id="set-password-btn">
-                    <span>パスワードを新規設定・変更する</span>
+                    <span>初回パスワードを設定する</span>
                 </button>
             </form>
 
             <div style="text-align: center;">
-                <span class="help-link" id="forgot-password-link">パスワードをお忘れですか？ / 救済処置について</span>
+                <span class="help-link" id="reset-password-link">パスワードを忘れた場合（合言葉で再設定）</span>
             </div>
 
             <div class="footer-note">
@@ -238,16 +248,30 @@
         </div>
     </div>
 
-    <!-- パスワード紛失・救済用モーダル -->
-    <div class="modal" id="help-modal">
+    <!-- 合言葉によるパスワード再設定用モーダル -->
+    <div class="modal" id="reset-modal">
         <div class="modal-content">
             <button class="close-modal" id="close-modal-btn">&times;</button>
-            <h3>パスワードの救済・再発行について</h3>
-            <p>
-                セキュリティ保護のため、すでに設定されたパスワードを勝手に他のユーザーが上書きすることはできません。<br><br>
-                パスワードを紛失された場合や、新しくパスワードを再設定したい場合は、サロンの運営者（管理者）へ直接ご連絡いただき、本人確認のうえで一時的な初期化または再発行を行ってください。
-            </p>
-            <button type="button" class="btn btn-gold" style="width: 100%; padding: 10px;" id="ok-modal-btn">閉じる</button>
+            <h3>合言葉によるパスワード再設定</h3>
+            <p>ご登録済みのクライアントIDと、事前に設定した「秘密の合言葉」を入力してください。一致すれば新しいパスワードに変更できます。</p>
+            
+            <div id="modal-error" class="modal-error"></div>
+
+            <form id="reset-form">
+                <div class="form-group">
+                    <label for="reset-client-id">クライアントID</label>
+                    <input type="text" id="reset-client-id" placeholder="例: #C-501" required>
+                </div>
+                <div class="form-group">
+                    <label for="secret-word">秘密の合言葉</label>
+                    <input type="text" id="secret-word" placeholder="例: お気に入りのブランド名など" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-password">新しいパスワード</label>
+                    <input type="password" id="new-password" placeholder="新しいパスワードを入力" required>
+                </div>
+                <button type="submit" class="btn btn-gold" style="width: 100%; padding: 12px;">パスワードを再設定する</button>
+            </form>
         </div>
     </div>
 
@@ -262,7 +286,7 @@
             successDiv.textContent = '';
         }
 
-        // 通常ログイン処理
+        // 通常ログイン
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             clearMessages();
@@ -290,14 +314,14 @@
             }
         });
 
-        // パスワード新規設定・変更ボタンの処理（セキュリティ強化版）
+        // 初回パスワード設定
         document.getElementById('set-password-btn').addEventListener('click', async () => {
             clearMessages();
             const clientId = document.getElementById('client-id').value.trim();
             const password = document.getElementById('password').value.trim();
 
             if (!clientId || !password) {
-                errorDiv.textContent = 'クライアントIDと新しいパスワードを入力してください。';
+                errorDiv.textContent = 'クライアントIDと設定したいパスワードを入力してください。';
                 errorDiv.style.display = 'block';
                 return;
             }
@@ -328,20 +352,52 @@
             }
         });
 
-        // モーダル操作
-        const helpModal = document.getElementById('help-modal');
-        document.getElementById('forgot-password-link').addEventListener('click', () => {
-            helpModal.style.display = 'flex';
+        // 合言葉による再設定フォーム送信
+        document.getElementById('reset-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const modalError = document.getElementById('modal-error');
+            modalError.style.display = 'none';
+
+            const clientId = document.getElementById('reset-client-id').value.trim();
+            const secretWord = document.getElementById('secret-word').value.trim();
+            const newPassword = document.getElementById('new-password').value.trim();
+
+            try {
+                const res = await fetch('/api/reset-password-by-secret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clientId, secretWord, newPassword })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert('パスワードが正常に再設定されました！新しいパスワードでログインしてください。');
+                    document.getElementById('reset-modal').style.display = 'none';
+                    document.getElementById('client-id').value = clientId;
+                    document.getElementById('password').value = '';
+                } else {
+                    modalError.textContent = data.message || '合言葉が一致しません。';
+                    modalError.style.display = 'block';
+                }
+            } catch (err) {
+                modalError.textContent = 'サーバー通信エラーが発生しました。';
+                modalError.style.display = 'block';
+            }
+        });
+
+        // モーダル開閉
+        const resetModal = document.getElementById('reset-modal');
+        document.getElementById('reset-password-link').addEventListener('click', () => {
+            document.getElementById('reset-form').reset();
+            document.getElementById('modal-error').style.display = 'none';
+            resetModal.style.display = 'flex';
         });
         document.getElementById('close-modal-btn').addEventListener('click', () => {
-            helpModal.style.display = 'none';
-        });
-        document.getElementById('ok-modal-btn').addEventListener('click', () => {
-            helpModal.style.display = 'none';
+            resetModal.style.display = 'none';
         });
         window.addEventListener('click', (e) => {
-            if (e.target === helpModal) {
-                helpModal.style.display = 'none';
+            if (e.target === resetModal) {
+                resetModal.style.display = 'none';
             }
         });
     </script>
