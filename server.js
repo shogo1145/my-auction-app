@@ -38,10 +38,7 @@ db.serialize(() => {
         memo TEXT
     )`);
 
-    // 既存テーブルに secret_word カラムがない場合の保険（自動追加）
-    db.run(`ALTER TABLE clients ADD COLUMN secret_word TEXT DEFAULT 'chanel'`, (err) => {
-        // すでにカラムが存在する場合はエラーになるが無視してOK
-    });
+    db.run(`ALTER TABLE clients ADD COLUMN secret_word TEXT DEFAULT 'chanel'`, (err) => {});
 
     db.run(`CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,10 +73,6 @@ db.serialize(() => {
     db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, secret_word, memo) VALUES ('#C-501', 'ショウゴ', 'password123', 'chanel', 'テストユーザー')`);
 });
 
-// ==========================================
-// 画面表示用のルート
-// ==========================================
-
 app.get('/', (req, res) => {
     const indexPath = fs.existsSync(path.join(__dirname, 'オークション.html')) 
         ? path.join(__dirname, 'オークション.html') 
@@ -91,26 +84,12 @@ app.get('/admin.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
-// ==========================================
-// 各種APIエンドポイント
-// ==========================================
-
-// クライアントのログイン（認証）API
 app.post('/api/login', (req, res) => {
     const { clientId, password } = req.body;
-    
     db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
-        if (err) {
-            return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
-        }
-        
-        if (!row) {
-            return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
-        }
-
-        if (row.password && row.password !== password) {
-            return res.status(400).json({ success: false, message: 'パスワードが間違っています。' });
-        }
+        if (err) return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
+        if (!row) return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
+        if (row.password && row.password !== password) return res.status(400).json({ success: false, message: 'パスワードが間違っています。' });
 
         res.json({ 
             success: true, 
@@ -124,110 +103,55 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// 初回パスワード設定API（従来版）
 app.post('/api/set-password', (req, res) => {
     const { clientId, password } = req.body;
-    
-    if (!clientId || !password) {
-        return res.status(400).json({ success: false, message: 'クライアントIDとパスワードを入力してください。' });
-    }
+    if (!clientId || !password) return res.status(400).json({ success: false, message: 'クライアントIDとパスワードを入力してください。' });
 
     db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
-        if (err) {
-            return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
-        }
-        if (!row) {
-            return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
-        }
+        if (err) return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
+        if (!row) return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
 
         if (row.password && row.password !== 'password123' && row.password !== '') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'すでに独自のパスワードが設定されています。「パスワードを忘れた場合」から合言葉で再設定してください。' 
-            });
+            return res.status(400).json({ success: false, message: 'すでに独自のパスワードが設定されています。' });
         }
 
         db.run(`UPDATE clients SET password = ? WHERE client_id = ?`, [password, clientId], function(err) {
-            if (err) {
-                return res.status(500).json({ success: false, message: 'パスワードの設定に失敗しました。' });
-            }
-            res.json({ 
-                success: true, 
-                message: 'パスワードが正常に設定されました。',
-                client: {
-                    client_id: row.client_id,
-                    client_name: row.client_name,
-                    memo: row.memo
-                }
-            });
+            if (err) return res.status(500).json({ success: false, message: 'パスワードの設定に失敗しました。' });
+            res.json({ success: true, message: 'パスワードが正常に設定されました。', client: { client_id: row.client_id, client_name: row.client_name, memo: row.memo } });
         });
     });
 });
 
-// ★【新規追加】初回パスワード＆秘密の合言葉の同時設定API
 app.post('/api/set-password-with-secret', (req, res) => {
     const { clientId, password, secretWord } = req.body;
-    
-    if (!clientId || !password || !secretWord) {
-        return res.status(400).json({ success: false, message: 'すべての項目を入力してください。' });
-    }
+    if (!clientId || !password || !secretWord) return res.status(400).json({ success: false, message: 'すべての項目を入力してください。' });
 
     db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
-        if (err) {
-            return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
-        }
-        if (!row) {
-            return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
-        }
+        if (err) return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
+        if (!row) return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
 
         if (row.password && row.password !== 'password123' && row.password !== '') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'すでに独自のパスワードが設定されています。「パスワードを忘れた場合」から合言葉で再設定してください。' 
-            });
+            return res.status(400).json({ success: false, message: 'すでに独自のパスワードが設定されています。' });
         }
 
         db.run(`UPDATE clients SET password = ?, secret_word = ? WHERE client_id = ?`, [password, secretWord, clientId], function(err) {
-            if (err) {
-                return res.status(500).json({ success: false, message: '設定の保存に失敗しました。' });
-            }
-            res.json({ 
-                success: true, 
-                message: 'パスワードと秘密の合言葉が正常に設定されました。',
-                client: {
-                    client_id: row.client_id,
-                    client_name: row.client_name,
-                    memo: row.memo
-                }
-            });
+            if (err) return res.status(500).json({ success: false, message: '設定の保存に失敗しました。' });
+            res.json({ success: true, message: 'パスワードと秘密の合言葉が正常に設定されました。', client: { client_id: row.client_id, client_name: row.client_name, memo: row.memo } });
         });
     });
 });
 
-// 合言葉によるパスワード再設定API
 app.post('/api/reset-password-by-secret', (req, res) => {
     const { clientId, secretWord, newPassword } = req.body;
-
-    if (!clientId || !secretWord || !newPassword) {
-        return res.status(400).json({ success: false, message: 'すべての項目を入力してください。' });
-    }
+    if (!clientId || !secretWord || !newPassword) return res.status(400).json({ success: false, message: 'すべての項目を入力してください。' });
 
     db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
-        if (err) {
-            return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
-        }
-        if (!row) {
-            return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
-        }
-
-        if (!row.secret_word || row.secret_word.trim() !== secretWord.trim()) {
-            return res.status(400).json({ success: false, message: '秘密の合言葉が一致しません。' });
-        }
+        if (err) return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
+        if (!row) return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
+        if (!row.secret_word || row.secret_word.trim() !== secretWord.trim()) return res.status(400).json({ success: false, message: '秘密の合言葉が一致しません。' });
 
         db.run(`UPDATE clients SET password = ? WHERE client_id = ?`, [newPassword, clientId], function(err) {
-            if (err) {
-                return res.status(500).json({ success: false, message: 'パスワードの更新に失敗しました。' });
-            }
+            if (err) return res.status(500).json({ success: false, message: 'パスワードの更新に失敗しました。' });
             res.json({ success: true, message: 'パスワードが再設定されました。' });
         });
     });
@@ -308,13 +232,11 @@ app.delete('/api/items/:id', (req, res) => {
 app.get('/api/items/export/csv', (req, res) => {
     db.all(`SELECT * FROM items ORDER BY id DESC`, [], (err, rows) => {
         if (err) return res.status(500).send('Database error');
-        
         let csv = '\uFEFFID,ブランド,商品コード,メモ,原価(JPY),開始価格(JPY),落札価格(JPY),最高落札者,ステータス\n';
         rows.forEach(i => {
             const memoEsc = (i.item_memo || '').replace(/"/g, '""');
             csv += `${i.id},"${i.brand || ''}","${i.item_code || ''}","${memoEsc}",${i.cost},${i.start_price},${i.current_bid},"${i.highest_bidder}","${i.status}"\n`;
         });
-
         res.header('Content-Type', 'text/csv; charset=utf-8');
         res.attachment('auction_history.csv');
         res.send(csv);
@@ -371,10 +293,8 @@ app.post('/api/bid', (req, res) => {
         const newBid = item.current_bid + addAmount;
         db.run(`UPDATE items SET current_bid = ?, highest_bidder = ? WHERE id = ?`, [newBid, clientId, itemId], function(err) {
             if (err) return res.status(500).json({ success: false, message: err.message });
-
             db.run(`INSERT INTO bids (item_id, client_id, amount, created_at) VALUES (?, ?, ?, datetime('now', 'localtime'))`,
                 [itemId, clientId, newBid]);
-
             res.json({ success: true, currentBid: newBid, highestBidder: clientId });
         });
     });
