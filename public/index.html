@@ -2,10 +2,15 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>VIP Private Auction — Member Access</title>
     <link rel="stylesheet" href="style.css">
     <style>
+        /* iPhoneなどのダブルタップズーム防止 */
+        button, .btn, input, .help-link {
+            touch-action: manipulation;
+        }
+
         .login-wrapper {
             display: flex;
             justify-content: center;
@@ -152,7 +157,6 @@
             letter-spacing: 0.05em;
         }
 
-        /* モーダル共通スタイル */
         .modal {
             display: none;
             position: fixed;
@@ -232,7 +236,6 @@
                     <span>サロンに入室する</span>
                 </button>
 
-                <!-- 初回パスワード設定ボタン（モーダルを開くように変更） -->
                 <button type="button" class="alt-btn" id="open-first-setup-modal">
                     <span>初回パスワードを設定する</span>
                 </button>
@@ -248,7 +251,7 @@
         </div>
     </div>
 
-    <!-- ★【新規追加】初回パスワード＆合言葉の同時設定用モーダル -->
+    <!-- 初回パスワード＆合言葉の同時設定用モーダル -->
     <div class="modal" id="first-setup-modal">
         <div class="modal-content">
             <button class="close-modal" id="close-first-modal-btn">&times;</button>
@@ -313,7 +316,6 @@
             successDiv.textContent = '';
         }
 
-        // 通常ログイン
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             clearMessages();
@@ -341,15 +343,12 @@
             }
         });
 
-        // ★【新規追加】初回パスワード＆合言葉の同時設定フォーム送信
         const firstSetupModal = document.getElementById('first-setup-modal');
-        
         document.getElementById('open-first-setup-modal').addEventListener('click', () => {
             document.getElementById('first-setup-form').reset();
             document.getElementById('first-modal-error').style.display = 'none';
             firstSetupModal.style.display = 'flex';
         });
-
         document.getElementById('close-first-modal-btn').addEventListener('click', () => {
             firstSetupModal.style.display = 'none';
         });
@@ -385,7 +384,6 @@
             }
         });
 
-        // 合言葉による再設定フォーム送信
         document.getElementById('reset-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const modalError = document.getElementById('modal-error');
@@ -418,7 +416,6 @@
             }
         });
 
-        // モーダル開閉（再設定用）
         const resetModal = document.getElementById('reset-modal');
         document.getElementById('reset-password-link').addEventListener('click', () => {
             document.getElementById('reset-form').reset();
@@ -428,15 +425,9 @@
         document.getElementById('close-modal-btn').addEventListener('click', () => {
             resetModal.style.display = 'none';
         });
-
-        // モーダル外クリック時の閉じる処理
         window.addEventListener('click', (e) => {
-            if (e.target === resetModal) {
-                resetModal.style.display = 'none';
-            }
-            if (e.target === firstSetupModal) {
-                firstSetupModal.style.display = 'none';
-            }
+            if (e.target === resetModal) resetModal.style.display = 'none';
+            if (e.target === firstSetupModal) firstSetupModal.style.display = 'none';
         });
     </script>
 </body>
