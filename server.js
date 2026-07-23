@@ -88,6 +88,31 @@ app.get('/admin.html', (req, res) => {
 // 各種APIエンドポイント
 // ==========================================
 
+// クライアントのログイン（認証）API
+app.post('/api/login', (req, res) => {
+    const { clientId, password } = req.body;
+    
+    db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
+        }
+        
+        if (!row) {
+            return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'ログインに成功しました。',
+            client: {
+                clientId: row.client_id,
+                clientName: row.client_name,
+                memo: row.memo
+            }
+        });
+    });
+});
+
 app.get('/api/clients', (req, res) => {
     db.all(`SELECT * FROM clients`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
