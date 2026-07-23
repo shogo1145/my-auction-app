@@ -50,6 +50,14 @@ db.serialize(() => {
         status TEXT DEFAULT 'pending'
     )`);
 
+    db.run(`CREATE TABLE IF NOT EXISTS bids (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER,
+        client_id TEXT,
+        amount INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -62,19 +70,16 @@ db.serialize(() => {
 });
 
 // ==========================================
-// 画面表示用のルート（道案内）を追加
+// 画面表示用のルート
 // ==========================================
 
-// 1. お客様用のページ（例: index.html または オークション画面）
 app.get('/', (req, res) => {
-    // もしお客様用画面のファイル名が違う場合は、ここのファイル名を合わせてください
     const indexPath = fs.existsSync(path.join(__dirname, 'オークション.html')) 
         ? path.join(__dirname, 'オークション.html') 
         : path.join(__dirname, 'index.html');
     res.sendFile(indexPath);
 });
 
-// 2. 管理画面（/admin.html）を表示する機能
 app.get('/admin.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin.html'));
 });
@@ -135,7 +140,26 @@ app.get('/api/items', (req, res) => {
     });
 });
 
-// CSVエクスポート用エンドポイント
+// 商品情報の更新（過去履歴の修正用API）
+app.put('/api/items/:id', (req, res) => {
+    const { brand, itemCode, itemMemo, cost, startPrice, currentBid, highestBidder, status } = req.body;
+    db.run(`UPDATE items SET brand = ?, item_code = ?, item_memo = ?, cost = ?, start_price = ?, current_bid = ?, highest_bidder = ?, status = ? WHERE id = ?`,
+        [brand, itemCode, itemMemo, Number(cost)||0, Number(startPrice)||0, Number(currentBid)||0, highestBidder, status, req.params.id],
+        function(err) {
+            if (err) return res.status(500).json({ success: false, error: err.message });
+            res.json({ success: true });
+        }
+    );
+});
+
+// 商品情報の削除API
+app.delete('/api/items/:id', (req, res) => {
+    db.run(`DELETE FROM items WHERE id = ?`, [req.params.id], function(err) {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        res.json({ success: true });
+    });
+});
+
 app.get('/api/items/export/csv', (req, res) => {
     db.all(`SELECT * FROM items ORDER BY id DESC`, [], (err, rows) => {
         if (err) return res.status(500).send('Database error');
@@ -152,7 +176,6 @@ app.get('/api/items/export/csv', (req, res) => {
     });
 });
 
-// 3. 管理画面から商品を追加し、自動でDBに保存・お客様画面へ反映させるAPI
 app.post('/api/items', upload.array('itemImages', 5), (req, res) => {
     const { brand, itemCode, itemMemo, cost, startPrice, timerSeconds } = req.body;
     const paths = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
@@ -199,23 +222,36 @@ app.post('/api/bid', (req, res) => {
     db.get(`SELECT * FROM items WHERE id = ? AND status = 'active'`, [itemId], (err, item) => {
         if (err || !item) return res.status(500).json({ success: false, message: 'アクティブな商品ではありません。' });
 
-        const newBid = item.current_bid + Number(amount);
+        const addAmount = Number(amount);
+        const newBid = item.current_bid + addAmount;
         db.run(`UPDATE items SET current_bid = ?, highest_bidder = ? WHERE id = ?`, [newBid, clientId, itemId], function(err) {
             if (err) return res.status(500).json({ success: false, message: err.message });
+
+            db.run(`INSERT INTO bids (item_id, client_id, amount, created_at) VALUES (?, ?, ?, datetime('now', 'localtime'))`,
+                [itemId, clientId, newBid]);
+
             res.json({ success: true, currentBid: newBid, highestBidder: clientId });
         });
     });
 });
 
-app.post('/api/login', (req, res) => {
-    const { clientId, password } = req.body;
-    if (password !== 'ShogoJapan') {
-        return res.json({ success: false, message: 'パスワードが間違っています。' });
-    }
-    db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
+app.get('/api/bids/active', (req, res) => {
+    db.get(`SELECT id FROM items WHERE status = 'active' LIMIT 1`, [], (err, activeItem) => {
+        if (err || !activeItem) return res.json([]);
+        db.all(`SELECT * FROM bids WHERE item_id = ? ORDER BY id DESC LIMIT 30`, [activeItem.id], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
+    });
+});
+
+app.get('/api/my-purchases', (req, res) => {
+    const clientId = req.query.clientId;
+    if (!clientId) return res.json([]);
+
+    db.all(`SELECT * FROM items WHERE status = 'finished' AND highest_bidder = ? ORDER BY id DESC`, [clientId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (!row) return res.json({ success: false, message: 'クライアントIDが見つかりません。' });
-        res.json({ success: true, client: row });
+        res.json(rows);
     });
 });
 
