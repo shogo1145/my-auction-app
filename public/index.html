@@ -97,6 +97,17 @@
             display: none;
         }
 
+        .success-msg {
+            background: rgba(212, 175, 55, 0.1);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            color: var(--gold-primary);
+            padding: 10px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85em;
+            margin-bottom: 20px;
+            display: none;
+        }
+
         .submit-btn {
             width: 100%;
             padding: 14px;
@@ -121,11 +132,63 @@
             background: rgba(212, 175, 55, 0.1);
         }
 
+        .help-link {
+            margin-top: 16px;
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            cursor: pointer;
+            text-decoration: underline;
+            display: inline-block;
+        }
+
+        .help-link:hover {
+            color: var(--gold-primary);
+        }
+
         .footer-note {
             margin-top: 28px;
             font-size: 0.75em;
             color: var(--text-muted);
             letter-spacing: 0.05em;
+        }
+
+        /* モーダルスタイル（パスワード忘れ・救済用） */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .modal-content {
+            background: #1a1a1a;
+            border: 1px solid var(--gold-primary);
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 400px;
+            width: 100%;
+            text-align: left;
+            position: relative;
+        }
+        .modal-content h3 {
+            color: var(--gold-primary);
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        .modal-content p {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        .close-modal {
+            position: absolute;
+            top: 15px; right: 15px;
+            background: none; border: none;
+            color: #fff; font-size: 1.2em; cursor: pointer;
         }
     </style>
 </head>
@@ -142,6 +205,7 @@
             <div class="login-subtitle">Exclusive Live Salon</div>
 
             <div id="error-msg" class="error-msg"></div>
+            <div id="success-msg" class="success-msg"></div>
 
             <form id="login-form">
                 <div class="form-group">
@@ -158,11 +222,15 @@
                     <span>サロンに入室する</span>
                 </button>
 
-                <!-- パスワードを新規設定・変更するためのボタン -->
+                <!-- パスワードを新規設定・変更するボタン -->
                 <button type="button" class="alt-btn" id="set-password-btn">
                     <span>パスワードを新規設定・変更する</span>
                 </button>
             </form>
+
+            <div style="text-align: center;">
+                <span class="help-link" id="forgot-password-link">パスワードをお忘れですか？ / 救済処置について</span>
+            </div>
 
             <div class="footer-note">
                 PRIVILEGED & CONFIDENTIAL ACCESS ONLY
@@ -170,16 +238,36 @@
         </div>
     </div>
 
+    <!-- パスワード紛失・救済用モーダル -->
+    <div class="modal" id="help-modal">
+        <div class="modal-content">
+            <button class="close-modal" id="close-modal-btn">&times;</button>
+            <h3>パスワードの救済・再発行について</h3>
+            <p>
+                セキュリティ保護のため、すでに設定されたパスワードを勝手に他のユーザーが上書きすることはできません。<br><br>
+                パスワードを紛失された場合や、新しくパスワードを再設定したい場合は、サロンの運営者（管理者）へ直接ご連絡いただき、本人確認のうえで一時的な初期化または再発行を行ってください。
+            </p>
+            <button type="button" class="btn btn-gold" style="width: 100%; padding: 10px;" id="ok-modal-btn">閉じる</button>
+        </div>
+    </div>
+
     <script>
+        const errorDiv = document.getElementById('error-msg');
+        const successDiv = document.getElementById('success-msg');
+
+        function clearMessages() {
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            successDiv.textContent = '';
+        }
+
         // 通常ログイン処理
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            clearMessages();
             const clientId = document.getElementById('client-id').value.trim();
             const password = document.getElementById('password').value.trim();
-            const errorDiv = document.getElementById('error-msg');
-
-            errorDiv.style.display = 'none';
-            errorDiv.textContent = '';
 
             try {
                 const res = await fetch('/api/login', {
@@ -202,17 +290,14 @@
             }
         });
 
-        // パスワード新規設定・変更ボタンの処理
+        // パスワード新規設定・変更ボタンの処理（セキュリティ強化版）
         document.getElementById('set-password-btn').addEventListener('click', async () => {
+            clearMessages();
             const clientId = document.getElementById('client-id').value.trim();
             const password = document.getElementById('password').value.trim();
-            const errorDiv = document.getElementById('error-msg');
-
-            errorDiv.style.display = 'none';
-            errorDiv.textContent = '';
 
             if (!clientId || !password) {
-                errorDiv.textContent = 'クライアントIDと設定したいパスワードを入力してください。';
+                errorDiv.textContent = 'クライアントIDと新しいパスワードを入力してください。';
                 errorDiv.style.display = 'block';
                 return;
             }
@@ -226,23 +311,37 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    errorDiv.style.color = 'var(--gold-primary, #d4af37)';
-                    errorDiv.textContent = 'パスワードが設定されました！入室します...';
-                    errorDiv.style.display = 'block';
+                    successDiv.textContent = data.message || 'パスワードが設定されました！入室します...';
+                    successDiv.style.display = 'block';
                     
                     localStorage.setItem('auctionClient', JSON.stringify(data.client));
                     setTimeout(() => {
                         location.href = 'auction.html';
                     }, 1000);
                 } else {
-                    errorDiv.style.color = '';
                     errorDiv.textContent = data.message || 'パスワードの設定に失敗しました。';
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {
-                errorDiv.style.color = '';
                 errorDiv.textContent = 'サーバー通信エラーが発生しました。';
                 errorDiv.style.display = 'block';
+            }
+        });
+
+        // モーダル操作
+        const helpModal = document.getElementById('help-modal');
+        document.getElementById('forgot-password-link').addEventListener('click', () => {
+            helpModal.style.display = 'flex';
+        });
+        document.getElementById('close-modal-btn').addEventListener('click', () => {
+            helpModal.style.display = 'none';
+        });
+        document.getElementById('ok-modal-btn').addEventListener('click', () => {
+            helpModal.style.display = 'none';
+        });
+        window.addEventListener('click', (e) => {
+            if (e.target === helpModal) {
+                helpModal.style.display = 'none';
             }
         });
     </script>
