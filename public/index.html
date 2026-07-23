@@ -152,7 +152,7 @@
             letter-spacing: 0.05em;
         }
 
-        /* モーダルスタイル（合言葉による再設定用） */
+        /* モーダル共通スタイル */
         .modal {
             display: none;
             position: fixed;
@@ -232,8 +232,8 @@
                     <span>サロンに入室する</span>
                 </button>
 
-                <!-- 初回パスワード設定ボタン -->
-                <button type="button" class="alt-btn" id="set-password-btn">
+                <!-- 初回パスワード設定ボタン（モーダルを開くように変更） -->
+                <button type="button" class="alt-btn" id="open-first-setup-modal">
                     <span>初回パスワードを設定する</span>
                 </button>
             </form>
@@ -245,6 +245,33 @@
             <div class="footer-note">
                 PRIVILEGED & CONFIDENTIAL ACCESS ONLY
             </div>
+        </div>
+    </div>
+
+    <!-- ★【新規追加】初回パスワード＆合言葉の同時設定用モーダル -->
+    <div class="modal" id="first-setup-modal">
+        <div class="modal-content">
+            <button class="close-modal" id="close-first-modal-btn">&times;</button>
+            <h3>初回パスワードと合言葉の設定</h3>
+            <p>クライアントID、新しいパスワード、および万が一の際にパスワードを再設定するための「秘密の合言葉」を入力してください。</p>
+            
+            <div id="first-modal-error" class="modal-error"></div>
+
+            <form id="first-setup-form">
+                <div class="form-group">
+                    <label for="setup-client-id">クライアントID</label>
+                    <input type="text" id="setup-client-id" placeholder="例: #C-501" required>
+                </div>
+                <div class="form-group">
+                    <label for="setup-password">新しいパスワード</label>
+                    <input type="password" id="setup-password" placeholder="設定したいパスワード" required>
+                </div>
+                <div class="form-group">
+                    <label for="setup-secret-word">秘密の合言葉</label>
+                    <input type="text" id="setup-secret-word" placeholder="例: お気に入りのブランド名など" required>
+                </div>
+                <button type="submit" class="btn btn-gold" style="width: 100%; padding: 12px;">初期設定を完了して入室</button>
+            </form>
         </div>
     </div>
 
@@ -314,41 +341,47 @@
             }
         });
 
-        // 初回パスワード設定
-        document.getElementById('set-password-btn').addEventListener('click', async () => {
-            clearMessages();
-            const clientId = document.getElementById('client-id').value.trim();
-            const password = document.getElementById('password').value.trim();
+        // ★【新規追加】初回パスワード＆合言葉の同時設定フォーム送信
+        const firstSetupModal = document.getElementById('first-setup-modal');
+        
+        document.getElementById('open-first-setup-modal').addEventListener('click', () => {
+            document.getElementById('first-setup-form').reset();
+            document.getElementById('first-modal-error').style.display = 'none';
+            firstSetupModal.style.display = 'flex';
+        });
 
-            if (!clientId || !password) {
-                errorDiv.textContent = 'クライアントIDと設定したいパスワードを入力してください。';
-                errorDiv.style.display = 'block';
-                return;
-            }
+        document.getElementById('close-first-modal-btn').addEventListener('click', () => {
+            firstSetupModal.style.display = 'none';
+        });
+
+        document.getElementById('first-setup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const modalError = document.getElementById('first-modal-error');
+            modalError.style.display = 'none';
+
+            const clientId = document.getElementById('setup-client-id').value.trim();
+            const password = document.getElementById('setup-password').value.trim();
+            const secretWord = document.getElementById('setup-secret-word').value.trim();
 
             try {
-                const res = await fetch('/api/set-password', {
+                const res = await fetch('/api/set-password-with-secret', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ clientId, password })
+                    body: JSON.stringify({ clientId, password, secretWord })
                 });
                 const data = await res.json();
 
                 if (data.success) {
-                    successDiv.textContent = data.message || 'パスワードが設定されました！入室します...';
-                    successDiv.style.display = 'block';
-                    
+                    alert('パスワードと秘密の合言葉が正常に設定されました！');
                     localStorage.setItem('auctionClient', JSON.stringify(data.client));
-                    setTimeout(() => {
-                        location.href = 'auction.html';
-                    }, 1000);
+                    location.href = 'auction.html';
                 } else {
-                    errorDiv.textContent = data.message || 'パスワードの設定に失敗しました。';
-                    errorDiv.style.display = 'block';
+                    modalError.textContent = data.message || '設定に失敗しました。';
+                    modalError.style.display = 'block';
                 }
             } catch (err) {
-                errorDiv.textContent = 'サーバー通信エラーが発生しました。';
-                errorDiv.style.display = 'block';
+                modalError.textContent = 'サーバー通信エラーが発生しました。';
+                modalError.style.display = 'block';
             }
         });
 
@@ -385,7 +418,7 @@
             }
         });
 
-        // モーダル開閉
+        // モーダル開閉（再設定用）
         const resetModal = document.getElementById('reset-modal');
         document.getElementById('reset-password-link').addEventListener('click', () => {
             document.getElementById('reset-form').reset();
@@ -395,9 +428,14 @@
         document.getElementById('close-modal-btn').addEventListener('click', () => {
             resetModal.style.display = 'none';
         });
+
+        // モーダル外クリック時の閉じる処理
         window.addEventListener('click', (e) => {
             if (e.target === resetModal) {
                 resetModal.style.display = 'none';
+            }
+            if (e.target === firstSetupModal) {
+                firstSetupModal.style.display = 'none';
             }
         });
     </script>
