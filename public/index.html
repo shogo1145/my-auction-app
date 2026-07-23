@@ -104,6 +104,23 @@
             margin-top: 10px;
         }
 
+        .alt-btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 0.9em;
+            margin-top: 10px;
+            background: transparent;
+            border: 1px solid var(--gold-primary);
+            color: var(--gold-primary);
+            border-radius: var(--radius-sm, 4px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .alt-btn:hover {
+            background: rgba(212, 175, 55, 0.1);
+        }
+
         .footer-note {
             margin-top: 28px;
             font-size: 0.75em;
@@ -140,6 +157,11 @@
                 <button type="submit" class="btn btn-gold submit-btn">
                     <span>サロンに入室する</span>
                 </button>
+
+                <!-- パスワードを新規設定・変更するためのボタン -->
+                <button type="button" class="alt-btn" id="set-password-btn">
+                    <span>パスワードを新規設定・変更する</span>
+                </button>
             </form>
 
             <div class="footer-note">
@@ -149,10 +171,11 @@
     </div>
 
     <script>
+        // 通常ログイン処理
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const clientId = document.getElementById('client-id').value;
-            const password = document.getElementById('password').value;
+            const clientId = document.getElementById('client-id').value.trim();
+            const password = document.getElementById('password').value.trim();
             const errorDiv = document.getElementById('error-msg');
 
             errorDiv.style.display = 'none';
@@ -174,6 +197,50 @@
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {
+                errorDiv.textContent = 'サーバー通信エラーが発生しました。';
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        // パスワード新規設定・変更ボタンの処理
+        document.getElementById('set-password-btn').addEventListener('click', async () => {
+            const clientId = document.getElementById('client-id').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const errorDiv = document.getElementById('error-msg');
+
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+
+            if (!clientId || !password) {
+                errorDiv.textContent = 'クライアントIDと設定したいパスワードを入力してください。';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/set-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clientId, password })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    errorDiv.style.color = 'var(--gold-primary, #d4af37)';
+                    errorDiv.textContent = 'パスワードが設定されました！入室します...';
+                    errorDiv.style.display = 'block';
+                    
+                    localStorage.setItem('auctionClient', JSON.stringify(data.client));
+                    setTimeout(() => {
+                        location.href = 'auction.html';
+                    }, 1000);
+                } else {
+                    errorDiv.style.color = '';
+                    errorDiv.textContent = data.message || 'パスワードの設定に失敗しました。';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.style.color = '';
                 errorDiv.textContent = 'サーバー通信エラーが発生しました。';
                 errorDiv.style.display = 'block';
             }
