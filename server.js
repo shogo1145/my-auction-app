@@ -29,7 +29,6 @@ const db = new sqlite3.Database('./auction.db', (err) => {
 });
 
 db.serialize(() => {
-    // 1. clients テーブルに password カラムを追加
     db.run(`CREATE TABLE IF NOT EXISTS clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         client_id TEXT UNIQUE,
@@ -66,7 +65,6 @@ db.serialize(() => {
     )`);
     db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('exchange_rate', '150')`);
 
-    // 2. 初期データにパスワードを追加 (例としてすべて 'password123' に設定)
     db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#A-108', 'ジョン・スミス', 'password123', 'WhatsApp / DHL')`);
     db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#B-402', 'エリカ・ワン', 'password123', 'WeChat / 銀行振込')`);
     db.run(`INSERT OR IGNORE INTO clients (client_id, client_name, password, memo) VALUES ('#C-501', 'ショウゴ', 'password123', 'テストユーザー')`);
@@ -91,7 +89,7 @@ app.get('/admin.html', (req, res) => {
 // 各種APIエンドポイント
 // ==========================================
 
-// 3. クライアントのログイン（認証）APIの修正（パスワード検証を追加）
+// クライアントのログイン（認証）API
 app.post('/api/login', (req, res) => {
     const { clientId, password } = req.body;
     
@@ -104,7 +102,7 @@ app.post('/api/login', (req, res) => {
             return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
         }
 
-        // パスワードの突合チェック（パスワードが登録されている場合は比較する）
+        // パスワードが登録されており、かつ一致しない場合のみエラーにする
         if (row.password && row.password !== password) {
             return res.status(400).json({ success: false, message: 'パスワードが間違っています。' });
         }
@@ -117,6 +115,39 @@ app.post('/api/login', (req, res) => {
                 client_name: row.client_name,
                 memo: row.memo
             }
+        });
+    });
+});
+
+// お客さん自身によるパスワード新規設定・変更API
+app.post('/api/set-password', (req, res) => {
+    const { clientId, password } = req.body;
+    
+    if (!clientId || !password) {
+        return res.status(400).json({ success: false, message: 'クライアントIDとパスワードを入力してください。' });
+    }
+
+    db.get(`SELECT * FROM clients WHERE client_id = ?`, [clientId], (err, row) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'データベースエラーが発生しました。' });
+        }
+        if (!row) {
+            return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
+        }
+
+        db.run(`UPDATE clients SET password = ? WHERE client_id = ?`, [password, clientId], function(err) {
+            if (err) {
+                return res.status(500).json({ success: false, message: 'パスワードの設定に失敗しました。' });
+            }
+            res.json({ 
+                success: true, 
+                message: 'パスワードが正常に設定されました。',
+                client: {
+                    client_id: row.client_id,
+                    client_name: row.client_name,
+                    memo: row.memo
+                }
+            });
         });
     });
 });
@@ -253,8 +284,8 @@ app.post('/api/bid', (req, res) => {
     db.get(`SELECT * FROM items WHERE id = ? AND status = 'active'`, [itemId], (err, item) => {
         if (err || !item) return res.status(500).json({ success: false, message: 'アクティブな商品ではありません。' });
 
-        const addAmount = Number(addAmount = Number(amount)); // ※修正
-        const newBid = item.current_bid + Number(amount);
+        const addAmount = Number(amount);
+        const newBid = item.current_bid + addAmount;
         db.run(`UPDATE items SET current_bid = ?, highest_bidder = ? WHERE id = ?`, [newBid, clientId, itemId], function(err) {
             if (err) return res.status(500).json({ success: false, message: err.message });
 
