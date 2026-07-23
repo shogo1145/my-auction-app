@@ -102,7 +102,6 @@ app.post('/api/login', (req, res) => {
             return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
         }
 
-        // パスワードが登録されており、かつ一致しない場合のみエラーにする
         if (row.password && row.password !== password) {
             return res.status(400).json({ success: false, message: 'パスワードが間違っています。' });
         }
@@ -119,7 +118,7 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// お客さん自身によるパスワード新規設定・変更API
+// お客さん自身によるパスワード新規設定・変更API（セキュリティ強化版）
 app.post('/api/set-password', (req, res) => {
     const { clientId, password } = req.body;
     
@@ -135,6 +134,17 @@ app.post('/api/set-password', (req, res) => {
             return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
         }
 
+        // セキュリティガード:
+        // すでに「初期値（password123）」以外のパスワードが設定されている場合、
+        // 誰でも勝手にボタン一つで上書きできないようにする（変更時は現在のパスワード確認、または管理者によるリセットを促す）
+        if (row.password && row.password !== 'password123' && row.password !== '') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'このIDにはすでに独自のパスワードが設定されています。変更・再設定が必要な場合は管理者にお問い合わせください。' 
+            });
+        }
+
+        // 初回設定または初期値のままである場合のみ、新しいパスワードへの設定を許可する
         db.run(`UPDATE clients SET password = ? WHERE client_id = ?`, [password, clientId], function(err) {
             if (err) {
                 return res.status(500).json({ success: false, message: 'パスワードの設定に失敗しました。' });
