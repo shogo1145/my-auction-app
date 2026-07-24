@@ -149,6 +149,7 @@
             align-items: center;
             justify-content: center;
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.02);
+            cursor: zoom-in; /* 拡大できることがわかるカーソル */
         }
 
         .image-container img {
@@ -161,6 +162,41 @@
 
         .image-container img.active {
             display: block;
+        }
+
+        .zoom-hint {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 2px 8px;
+            font-size: 0.75em;
+            border-radius: 4px;
+            pointer-events: none;
+        }
+
+        /* 写真拡大用モーダル */
+        #image-zoom-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            cursor: zoom-out;
+        }
+
+        #image-zoom-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 4px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            object-fit: contain;
         }
 
         .thumbnails {
@@ -226,6 +262,21 @@
             font-size: 1.4em;
             font-weight: 700;
             color: var(--rose-red);
+        }
+
+        /* 延長通知バナー */
+        .extension-notice {
+            color: #d97706;
+            font-size: 0.85em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 12px;
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            padding: 6px;
+            border-radius: 4px;
+            display: none;
+            animation: pulse 1s infinite;
         }
 
         .price-val {
@@ -367,8 +418,8 @@
                     <strong style="color:var(--gold-primary);">NOTE:</strong> <span id="item-memo-text"></span>
                 </div>
 
-                <!-- Image View -->
-                <div class="image-container" id="main-image-container">
+                <!-- Image View with Zoom feature -->
+                <div class="image-container" id="main-image-container" onclick="openImageModal()">
                     <p style="color: var(--text-muted);" id="txt-loading-img">画像読み込み中...</p>
                 </div>
                 <div class="thumbnails" id="thumbnails-container"></div>
@@ -383,6 +434,11 @@
                         <span class="status-label" id="txt-current-price-label">CURRENT BID</span>
                         <span class="price-val" id="price-display">--</span>
                     </div>
+                </div>
+
+                <!-- 残り5秒延長通知用バナー -->
+                <div class="extension-notice" id="extension-notice">
+                    ⚠️ 残り5秒未満での応札があったため、残り時間が5秒延長されました！
                 </div>
 
                 <div class="highest-bidder-box">
@@ -416,6 +472,11 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- 写真拡大用モーダル (Lightbox) -->
+    <div id="image-zoom-modal" onclick="closeImageModal()">
+        <img id="modal-zoomed-img" src="" alt="Zoomed Item Image">
     </div>
 
     <!-- サブツリー Modal (メニュー / 設定 / My Purchases / 多言語設定) -->
@@ -589,8 +650,17 @@
             try {
                 await fetchSettings();
                 const res = await fetch('/api/items/active');
-                const item = await res.json();
+                const data = await res.json();
                 
+                // サーバーから残り時間情報が同居している場合に対応
+                const item = data.item || data; 
+                if (data.remainingSeconds !== undefined) {
+                    // サーバー側タイマーと大きなズレがある場合のみ同期
+                    if (Math.abs(remainingSeconds - data.remainingSeconds) > 3) {
+                        remainingSeconds = data.remainingSeconds;
+                    }
+                }
+
                 const winBanner = document.getElementById('win-banner');
 
                 if (item && item.id) {
@@ -617,7 +687,7 @@
                     updatePriceDisplay();
                     document.getElementById('highest-bidder').textContent = item.highest_bidder || 'NONE';
 
-                    updateImages(item.image_urls);
+                    updateImages(item.image_urls || item.images);
 
                     const clientIdToCheck = (typeof currentClient === 'string') ? currentClient : (currentClient.client_id || currentClient.clientId || currentClient.id);
                     if (item.status === 'finished' && item.highest_bidder === clientIdToCheck) {
@@ -685,7 +755,7 @@
 
         function updateImages(urlsJson) {
             try {
-                const urls = JSON.parse(urlsJson || '[]');
+                const urls = (typeof urlsJson === 'string') ? JSON.parse(urlsJson || '[]') : (urlsJson || []);
                 const mainContainer = document.getElementById('main-image-container');
                 const thumbContainer = document.getElementById('thumbnails-container');
                 
@@ -697,7 +767,7 @@
 
                 if (mainContainer.dataset.loadedIds !== urls.join(',')) {
                     mainContainer.dataset.loadedIds = urls.join(',');
-                    mainContainer.innerHTML = '';
+                    mainContainer.innerHTML = '<div class="zoom-hint">🔍 クリックして拡大</div>';
                     thumbContainer.innerHTML = '';
 
                     urls.forEach((url, index) => {
@@ -710,7 +780,8 @@
                         const thumb = document.createElement('img');
                         thumb.src = url;
                         if (index === 0) thumb.classList.add('selected');
-                        thumb.onclick = () => {
+                        thumb.onclick = (e) => {
+                            e.stopPropagation(); // モーダル起動を防ぐ
                             document.querySelectorAll('.image-container img').forEach(i => i.classList.remove('active'));
                             document.querySelectorAll('.thumbnails img').forEach(t => t.classList.remove('selected'));
                             img.classList.add('active');
@@ -720,6 +791,18 @@
                     });
                 }
             } catch(e) {}
+        }
+
+        // --- 写真拡大機能（モーダル） ---
+        function openImageModal() {
+            const activeImg = document.querySelector('.image-container img.active');
+            if (!activeImg || !activeImg.src) return;
+            document.getElementById('modal-zoomed-img').src = activeImg.src;
+            document.getElementById('image-zoom-modal').style.display = 'flex';
+        }
+
+        function closeImageModal() {
+            document.getElementById('image-zoom-modal').style.display = 'none';
         }
 
         function updatePriceDisplay() {
@@ -745,7 +828,6 @@
                     const secs = remainingSeconds % 60;
                     timerEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                     
-                    // タイマーが0秒になった瞬間にサーバーへ終了＆次への移行をリクエスト
                     if (remainingSeconds === 0 && currentItem) {
                         try {
                             await fetch('/api/items/check-and-next', {
@@ -791,6 +873,19 @@
                     currentItem.highest_bidder = data.highestBidder;
                     updatePriceDisplay();
                     document.getElementById('highest-bidder').textContent = data.highestBidder;
+                    
+                    // --- 残り5秒以内の応札自動延長の処理 ---
+                    if (data.extended || data.newRemainingSeconds !== undefined) {
+                        remainingSeconds = data.newRemainingSeconds !== undefined ? data.newRemainingSeconds : (remainingSeconds + 5);
+                        
+                        // 延長通知バナーを表示
+                        const notice = document.getElementById('extension-notice');
+                        notice.style.display = 'block';
+                        setTimeout(() => {
+                            notice.style.display = 'none';
+                        }, 4000);
+                    }
+
                     pollActiveBids();
                 } else {
                     alert(data.message || '入札に失敗しました。');
