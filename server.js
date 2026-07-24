@@ -262,10 +262,14 @@ app.post('/api/items', upload.array('itemImages', 5), (req, res) => {
     });
 });
 
+// 修正点: 管理画面側が期待する { item: row, onlineCount: ... } の形式で返すように変更
 app.get('/api/items/active', (req, res) => {
     db.get(`SELECT * FROM items WHERE status = 'active' LIMIT 1`, [], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(row || {});
+        res.json({
+            item: row || null,
+            onlineCount: 1 
+        });
     });
 });
 
