@@ -130,7 +130,6 @@
                 <span class="badge badge-gold">MY PAGE</span>
                 <h2 class="font-serif" style="margin-top: 4px; font-size: 1.2em;" id="client-name-display">落札履歴・購入商品一覧</h2>
             </div>
-            <!-- リンク先を auction.html に修正 -->
             <button onclick="location.href='auction.html'" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85em;">← オークション会場へ戻る</button>
         </div>
 
@@ -216,7 +215,8 @@
             const totalUsd = Math.floor(totalJpy / exchangeRate);
             document.getElementById('total-items-count').textContent = `${items.length} items won`;
             document.getElementById('total-amount-jpy').textContent = '¥' + totalJpy.toLocaleString();
-            document.getElementById('total-amount-usd').textContent = '($" + totalUsd.toLocaleString() + ")'.replace('$', '$');
+            // 修正箇所：テンプレートリテラルを正しく修正
+            document.getElementById('total-amount-usd').textContent = `($${totalUsd.toLocaleString()})`;
 
             items.forEach(item => {
                 let imageUrl = '';
