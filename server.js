@@ -10,6 +10,8 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+// ルートディレクトリの静的ファイルも配信できるように設定
+app.use(express.static(__dirname));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const uploadDir = path.join(__dirname, 'uploads');
@@ -58,7 +60,6 @@ db.serialize(() => {
         status TEXT DEFAULT 'pending'
     )`);
 
-    // 既存のテーブルに expires_at がない場合のマイグレーション用
     db.run(`ALTER TABLE items ADD COLUMN expires_at INTEGER`, (err) => {});
 
     db.run(`CREATE TABLE IF NOT EXISTS bids (
@@ -89,6 +90,14 @@ app.get('/', (req, res) => {
 
 app.get('/admin.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// 追加: mypage.htmlへのアクセスを確実に処理するルーティング
+app.get('/mypage.html', (req, res) => {
+    const mypagePath = fs.existsSync(path.join(__dirname, 'mypage.html')) 
+        ? path.join(__dirname, 'mypage.html') 
+        : path.join(__dirname, 'マイページ.html');
+    res.sendFile(mypagePath);
 });
 
 app.post('/api/login', (req, res) => {
@@ -303,7 +312,6 @@ app.get('/api/items/active', (req, res) => {
     db.get(`SELECT * FROM items WHERE status = 'active' LIMIT 1`, [], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         
-        // アクティブな商品が存在するが、expires_atが設定されていない場合のフォールバック
         if (row && !row.expires_at) {
             const expiresAt = Date.now() + ((row.timer_seconds || 180) * 1000);
             db.run(`UPDATE items SET expires_at = ? WHERE id = ?`, [expiresAt, row.id]);
@@ -313,7 +321,6 @@ app.get('/api/items/active', (req, res) => {
         res.json({
             item: row || null,
             serverTime: Date.now(),
-            // 修正: Math.maxを外して、実際のアクセス数（0人も許可）を返すように変更
             onlineCount: activeSessions.size 
         });
     });
@@ -339,7 +346,6 @@ app.post('/api/items/check-and-next', (req, res) => {
     const { itemId } = req.body;
     db.get(`SELECT * FROM items WHERE id = ?`, [itemId], (err, item) => {
         if (err || !item) return res.json({ success: false });
-        // サーバー側でも時間が過ぎているか確認
         if (item.status === 'active' && (!item.expires_at || Date.now() >= item.expires_at)) {
             db.run(`UPDATE items SET status = 'finished' WHERE id = ?`, [itemId], () => {
                 db.get(`SELECT id, start_price, timer_seconds FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, nextRow) => {
@@ -364,7 +370,6 @@ app.post('/api/bid', (req, res) => {
     db.get(`SELECT * FROM items WHERE id = ? AND status = 'active'`, [itemId], (err, item) => {
         if (err || !item) return res.status(500).json({ success: false, message: 'アクティブな商品ではありません。' });
 
-        // すでに時間が切れていないか確認
         if (item.expires_at && Date.now() >= item.expires_at) {
             return res.status(400).json({ success: false, message: 'この商品のオークションはすでに終了しています。' });
         }
@@ -375,7 +380,6 @@ app.post('/api/bid', (req, res) => {
         let newExpiresAt = item.expires_at;
         let extended = false;
         
-        // 残り5秒未満（5000ミリ秒未満）での応札があれば5秒延長
         const remainingMs = item.expires_at - Date.now();
         if (remainingMs < 5000) {
             newExpiresAt = item.expires_at + 5000;
@@ -412,7 +416,7 @@ app.get('/api/my-purchases', (req, res) => {
     const clientId = req.query.clientId;
     if (!clientId) return res.json([]);
 
-    db.all(`SELECT * FROM items WHERE status = 'finished' AND highest_bidder = ? ORDER BY id DESC`, [clientId], (err, rows) => {
+    db.all(`SELECT * FROM items WHERE status = 'finished' && highest_bidder = ? ORDER BY id DESC`, [clientId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
