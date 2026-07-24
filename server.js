@@ -28,6 +28,9 @@ const db = new sqlite3.Database('./auction.db', (err) => {
     else console.log('Connected to SQLite database.');
 });
 
+// オンラインアクセス（ハートビート）を追跡するためのメモリ上のストア
+const activeSessions = new Map();
+
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,9 +94,13 @@ app.post('/api/login', (req, res) => {
         if (!row) return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
         if (row.password && row.password !== password) return res.status(400).json({ success: false, message: 'パスワードが間違っています。' });
 
+        const sessionToken = 'sess_' + Date.now + '_' + Math.random().toString(36).substring(2);
+        activeSessions.set(sessionToken, { clientId: row.client_id, lastSeen: Date.now() });
+
         res.json({ 
             success: true, 
             message: 'ログインに成功しました。',
+            sessionToken: sessionToken,
             client: {
                 client_id: row.client_id,
                 client_name: row.client_name,
@@ -101,6 +108,24 @@ app.post('/api/login', (req, res) => {
             }
         });
     });
+});
+
+// 生存確認（ハートビート）とオンライン人数集計用エンドポイント
+app.post('/api/heartbeat', (req, res) => {
+    const { sessionToken, clientId } = req.body;
+    const key = sessionToken || clientId;
+    if (key) {
+        activeSessions.set(key, { clientId: clientId || key, lastSeen: Date.now() });
+    }
+
+    const now = Date.now();
+    for (let [token, data] of activeSessions.entries()) {
+        if (now - data.lastSeen > 20000) {
+            activeSessions.delete(token);
+        }
+    }
+
+    res.json({ success: true, onlineCount: activeSessions.size });
 });
 
 app.post('/api/set-password', (req, res) => {
@@ -262,13 +287,20 @@ app.post('/api/items', upload.array('itemImages', 5), (req, res) => {
     });
 });
 
-// 修正点: 管理画面側が期待する { item: row, onlineCount: ... } の形式で返すように変更
+// アクティブな商品と、実際のオンラインアクセス数（onlineCount）を返却
 app.get('/api/items/active', (req, res) => {
+    const now = Date.now();
+    for (let [token, data] of activeSessions.entries()) {
+        if (now - data.lastSeen > 20000) {
+            activeSessions.delete(token);
+        }
+    }
+
     db.get(`SELECT * FROM items WHERE status = 'active' LIMIT 1`, [], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({
             item: row || null,
-            onlineCount: 1 
+            onlineCount: Math.max(1, activeSessions.size) 
         });
     });
 });
@@ -288,7 +320,6 @@ app.post('/api/items/next', (req, res) => {
     });
 });
 
-// タイマー終了時にクライアントから自動で次へ進めるためのエンドポイント
 app.post('/api/items/check-and-next', (req, res) => {
     const { itemId } = req.body;
     db.get(`SELECT * FROM items WHERE id = ?`, [itemId], (err, item) => {
