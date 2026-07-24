@@ -6,7 +6,6 @@
     <title id="page-title">VIP Private Auction — Live Hall</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* iPhoneなどのダブルタップズーム防止 */
         button, .btn, input, select, .currency-btn {
             touch-action: manipulation;
         }
@@ -87,7 +86,6 @@
             box-shadow: 0 2px 10px rgba(184, 134, 11, 0.3);
         }
 
-        /* 2 Column Layout */
         .main-grid {
             display: grid;
             grid-template-columns: 1fr 340px;
@@ -164,6 +162,27 @@
             display: block;
         }
 
+        /* 待機画面専用スタイル */
+        .waiting-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            gap: 12px;
+        }
+
+        .waiting-icon {
+            font-size: 3em;
+            animation: pulse-slow 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
         .zoom-hint {
             position: absolute;
             bottom: 8px;
@@ -176,7 +195,6 @@
             pointer-events: none;
         }
 
-        /* 写真拡大用モーダル */
         #image-zoom-modal {
             position: fixed;
             top: 0;
@@ -264,7 +282,6 @@
             color: var(--rose-red);
         }
 
-        /* 延長通知バナー */
         .extension-notice {
             color: #d97706;
             font-size: 0.85em;
@@ -297,7 +314,6 @@
             font-weight: 600;
         }
 
-        /* 落札成功時の祝福UI */
         .win-banner {
             background: linear-gradient(135deg, #d4af37, #aa7c11);
             color: #ffffff;
@@ -421,13 +437,11 @@
         <p style="color:var(--text-secondary); font-size:0.9em; letter-spacing:0.1em; text-transform:uppercase;">Loading Auction Hall...</p>
     </div>
 
-    <!-- 画像拡大モーダル -->
     <div id="image-zoom-modal" onclick="closeImageZoom()">
         <img id="zoomed-image" src="" alt="Zoomed">
     </div>
 
     <div class="auction-layout-container">
-        <!-- ヘッダー -->
         <div class="header-bar glass-panel animate-slide-up">
             <div class="client-badge">
                 <div class="client-avatar" id="avatar-initial">C</div>
@@ -445,26 +459,29 @@
             </div>
         </div>
 
-        <!-- メイングリッド -->
         <div class="main-grid">
-            <!-- 左側：オークション商品エリア -->
             <div class="auction-card glass-panel animate-fade-in" style="animation-delay: 0.1s;">
                 <div class="brand-header">
-                    <span class="badge badge-gold" id="brand-badge">---</span>
+                    <span class="badge badge-gold" id="brand-badge">WAITING</span>
                 </div>
-                <h2 class="item-title font-serif" id="item-name">商品がありません</h2>
+                <h2 class="item-title font-serif" id="item-name">次の商品の出品をお待ちください</h2>
                 
                 <div class="item-memo-box" id="item-memo-container" style="display: none;">
                     <span id="item-memo-text"></span>
                 </div>
 
+                <!-- 待機画面時のプレースホルダーを含む画像コンテナ -->
                 <div class="image-container" id="main-image-container" onclick="openImageZoom()">
-                    <img src="images/placeholder.jpg" id="main-image" class="active" alt="商品画像">
-                    <div class="zoom-hint">🔍 Tap to Zoom</div>
+                    <div id="waiting-placeholder" class="waiting-placeholder">
+                        <div class="waiting-icon">⏳</div>
+                        <p style="font-weight: 600; font-size: 0.95em; color: var(--gold-primary);">VIP PRIVATE AUCTION</p>
+                        <p style="font-size: 0.8em; color: var::var(--text-muted);">まもなく次のオークションが開始されます</p>
+                    </div>
+                    <img src="" id="main-image" alt="商品画像">
+                    <div class="zoom-hint" id="zoom-hint" style="display: none;">🔍 Tap to Zoom</div>
                 </div>
-                <div class="thumbnails" id="thumbnail-container">
-                    <!-- サムネイルが動的に入る -->
-                </div>
+                
+                <div class="thumbnails" id="thumbnail-container"></div>
 
                 <div id="win-banner" class="win-banner">
                     🎉 CONGRATULATIONS! YOU WON THIS ITEM! 🎉
@@ -507,14 +524,13 @@
                 </div>
             </div>
 
-            <!-- 右側：履歴エリア -->
             <div class="sidebar-panel animate-fade-in" style="animation-delay: 0.2s;">
                 <div class="glass-panel history-card">
                     <h3 class="font-serif" style="font-size: 1.1em; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px; color: var(--text-primary);">
                         Bid History
                     </h3>
                     <div class="history-list" id="bid-history">
-                        <!-- 履歴がここに入る -->
+                        <div style="text-align: center; color: #94a3b8; font-size: 0.85em; padding: 20px;">履歴はありません</div>
                     </div>
                 </div>
             </div>
@@ -531,9 +547,8 @@
         let timeRemainingInterval;
         let targetEndTime = null;
         
-        // テキスト多言語化（とりあえず英語ベース）
         const texts = {
-            'JPY': { timer: 'Time Left', price: 'Current Bid', wait: 'Waiting for next item...' },
+            'JPY': { timer: 'Time Left', price: 'Current Bid', wait: '次の商品の出品をお待ちください' },
             'USD': { timer: 'Time Left', price: 'Current Bid', wait: 'Waiting for next item...' }
         };
 
@@ -548,7 +563,6 @@
             document.getElementById('avatar-initial').textContent = clientName.charAt(0).toUpperCase();
         }
 
-        // ★修正: サーバーへ定期的にオンライン状態を通知する関数を追加
         async function sendHeartbeat() {
             if (!currentClient) return;
             const clientIdToSend = (typeof currentClient === 'string') 
@@ -570,7 +584,6 @@
             pollActiveItem();
             pollActiveBids();
             
-            // ★修正: 初回ハートビート送信と定期実行の設定
             sendHeartbeat();
             
             setInterval(pollActiveItem, 2000);
@@ -614,7 +627,7 @@
 
         function openImageZoom() {
             const mainImg = document.getElementById('main-image');
-            if(mainImg.src && !mainImg.src.includes('placeholder.jpg')) {
+            if(mainImg.src && mainImg.style.display === 'block' && !mainImg.src.includes('placeholder.jpg')) {
                 document.getElementById('zoomed-image').src = mainImg.src;
                 document.getElementById('image-zoom-modal').style.display = 'flex';
             }
@@ -631,7 +644,6 @@
                 const serverTime = data.serverTime;
 
                 if (item) {
-                    // 商品切り替え時
                     if (activeItemId !== item.id) {
                         activeItemId = item.id;
                         document.getElementById('brand-badge').textContent = item.brand || 'BRAND';
@@ -649,7 +661,6 @@
                         updateImages(item.image_urls);
                     }
 
-                    // 時間延長の検知
                     if (targetEndTime && item.expires_at > targetEndTime) {
                         showExtensionNotice();
                     }
@@ -673,7 +684,6 @@
                     }
 
                 } else {
-                    // アクティブ商品がない場合
                     activeItemId = null;
                     document.getElementById('brand-badge').textContent = 'WAITING';
                     document.getElementById('item-name').textContent = texts[currentCurrency].wait;
@@ -683,8 +693,14 @@
                     document.getElementById('current-price-usd').textContent = '($0)';
                     document.getElementById('highest-bidder-id').textContent = '---';
                     document.getElementById('win-banner').style.display = 'none';
+                    
+                    // 待機画面の表示切り替え
+                    document.getElementById('waiting-placeholder').style.display = 'flex';
+                    document.getElementById('main-image').style.display = 'none';
+                    document.getElementById('zoom-hint').style.display = 'none';
+                    document.getElementById('thumbnail-container').innerHTML = '';
+                    
                     enableButtons(false);
-                    updateImages('[]');
                 }
             } catch(e) {}
         }
@@ -701,7 +717,7 @@
             const renderTime = () => {
                 if (!targetEndTime) return;
                 let diff = Math.floor((targetEndTime - serverTime) / 1000);
-                serverTime += 1000; // ローカルで1秒進める
+                serverTime += 1000;
                 
                 if (diff <= 0) {
                     document.getElementById('time-left').textContent = '00:00';
@@ -739,7 +755,6 @@
             const data = await res.json();
             
             if (data.transitioned) {
-                // 落札者チェック
                 const highestId = document.getElementById('highest-bidder-id').textContent;
                 const clientIdStr = typeof currentClient === 'string' ? currentClient : currentClient.client_id;
                 
@@ -749,8 +764,8 @@
 
                 setTimeout(() => {
                     pollActiveItem();
-                    document.getElementById('bid-history').innerHTML = ''; // 履歴リセット
-                }, 3000); // 3秒後に次の商品へ
+                    document.getElementById('bid-history').innerHTML = '<div style="text-align: center; color: #94a3b8; font-size: 0.85em; padding: 20px;">履歴はありません</div>';
+                }, 3000);
             }
         }
 
@@ -790,13 +805,20 @@
 
             const thumbContainer = document.getElementById('thumbnail-container');
             const mainImg = document.getElementById('main-image');
+            const waitingPlaceholder = document.getElementById('waiting-placeholder');
+            const zoomHint = document.getElementById('zoom-hint');
             thumbContainer.innerHTML = '';
 
             if (urls.length === 0) {
-                mainImg.src = 'images/placeholder.jpg';
+                waitingPlaceholder.style.display = 'flex';
+                mainImg.style.display = 'none';
+                zoomHint.style.display = 'none';
                 return;
             }
 
+            waitingPlaceholder.style.display = 'none';
+            mainImg.style.display = 'block';
+            zoomHint.style.display = 'block';
             mainImg.src = urls[0];
             
             urls.forEach((url, idx) => {
@@ -824,6 +846,12 @@
         function renderBids(bids) {
             const container = document.getElementById('bid-history');
             container.innerHTML = '';
+            
+            if (!bids || bids.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #94a3b8; font-size: 0.85em; padding: 20px;">履歴はありません</div>';
+                return;
+            }
+
             const clientIdStr = typeof currentClient === 'string' ? currentClient : currentClient.client_id;
             
             bids.forEach(b => {
@@ -863,7 +891,6 @@
                 updatePriceDisplay();
                 pollActiveBids();
                 
-                // 延長処理の反映
                 if (data.extended) {
                     targetEndTime = data.newExpiresAt;
                     showExtensionNotice();
