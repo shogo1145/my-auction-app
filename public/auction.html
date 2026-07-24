@@ -336,6 +336,12 @@
             letter-spacing: 0.02em;
         }
 
+        .bid-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(40%);
+        }
+
         /* サブツリー（メニューモーダル）の拡張スタイル */
         .submenu-section {
             margin-bottom: 20px;
@@ -448,13 +454,13 @@
 
                 <!-- Bid Action Buttons -->
                 <div class="bid-buttons">
-                    <button id="bid-btn-1" class="btn btn-gold bid-btn" onclick="placeBid(step1)">
+                    <button id="bid-btn-1" class="btn btn-gold bid-btn" onclick="placeBid(step1)" disabled>
                         <span>+ $10</span>
                     </button>
-                    <button id="bid-btn-2" class="btn btn-gold bid-btn" onclick="placeBid(step2)">
+                    <button id="bid-btn-2" class="btn btn-gold bid-btn" onclick="placeBid(step2)" disabled>
                         <span>+ $100</span>
                     </button>
-                    <button id="bid-btn-3" class="btn btn-gold bid-btn" onclick="placeBid(step3)">
+                    <button id="bid-btn-3" class="btn btn-gold bid-btn" onclick="placeBid(step3)" disabled>
                         <span>+ $1000</span>
                     </button>
                 </div>
@@ -663,7 +669,7 @@
 
                 const winBanner = document.getElementById('win-banner');
 
-                if (item && item.id) {
+                if (item && item.id && item.status === 'active') {
                     if (lastItemId !== item.id) {
                         lastItemId = item.id;
                         remainingSeconds = item.timer_seconds || 180;
@@ -696,6 +702,9 @@
                         winBanner.style.display = 'none';
                     }
                 } else {
+                    // アクティブな商品がない、または終了している場合
+                    currentItem = null;
+                    lastItemId = null;
                     document.getElementById('item-brand').textContent = 'EXHIBITION PAUSED';
                     document.getElementById('item-code').textContent = '現在出品中の商品はありません';
                     document.getElementById('item-memo-box').style.display = 'none';
@@ -703,8 +712,11 @@
                     document.getElementById('highest-bidder').textContent = '---';
                     document.getElementById('main-image-container').innerHTML = '<p style="color: var(--text-muted);">次回出品をお待ちください</p>';
                     document.getElementById('thumbnails-container').innerHTML = '';
-                    document.getElementById('timer-display').textContent = '--:--';
+                    document.getElementById('timer-display').textContent = '00:00';
                     winBanner.style.display = 'none';
+                    
+                    // 終了時はボタンを確実にロック
+                    setBiddingEnabled(false);
                 }
             } catch(e) {}
         }
@@ -818,8 +830,16 @@
             }
         }
 
+        function setBiddingEnabled(enabled) {
+            document.getElementById('bid-btn-1').disabled = !enabled;
+            document.getElementById('bid-btn-2').disabled = !enabled;
+            document.getElementById('bid-btn-3').disabled = !enabled;
+        }
+
         function startTimer() {
             if (timerInterval) clearInterval(timerInterval);
+            setBiddingEnabled(true);
+
             timerInterval = setInterval(async () => {
                 const timerEl = document.getElementById('timer-display');
                 if (remainingSeconds > 0) {
@@ -828,23 +848,31 @@
                     const secs = remainingSeconds % 60;
                     timerEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                     
-                    if (remainingSeconds === 0 && currentItem) {
-                        try {
-                            await fetch('/api/items/check-and-next', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ itemId: currentItem.id })
-                            });
-                        } catch(e) {}
+                    if (remainingSeconds === 0) {
+                        setBiddingEnabled(false);
+                        timerEl.textContent = '00:00';
+                        if (currentItem) {
+                            try {
+                                await fetch('/api/items/check-and-next', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ itemId: currentItem.id })
+                                });
+                            } catch(e) {}
+                        }
                     }
                 } else {
-                    timerEl.textContent = 'CLOSED';
+                    timerEl.textContent = '00:00';
+                    setBiddingEnabled(false);
                 }
             }, 1000);
         }
 
         async function placeBid(amountUSD) {
-            if (!currentItem) return;
+            if (!currentItem || remainingSeconds <= 0) {
+                alert('アクティブな商品ではないか、すでに終了しています。');
+                return;
+            }
 
             const clientIdToSend = (typeof currentClient === 'string') 
                 ? currentClient 
