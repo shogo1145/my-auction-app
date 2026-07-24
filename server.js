@@ -92,7 +92,7 @@ app.get('/admin.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
-// 追加: mypage.htmlへのアクセスを確実に処理するルーティング
+// mypage.htmlへのアクセスを確実に処理するルーティング
 app.get('/mypage.html', (req, res) => {
     const mypagePath = fs.existsSync(path.join(__dirname, 'mypage.html')) 
         ? path.join(__dirname, 'mypage.html') 
@@ -416,7 +416,7 @@ app.get('/api/my-purchases', (req, res) => {
     const clientId = req.query.clientId;
     if (!clientId) return res.json([]);
 
-    db.all(`SELECT * FROM items WHERE status = 'finished' && highest_bidder = ? ORDER BY id DESC`, [clientId], (err, rows) => {
+    db.all(`SELECT * FROM items WHERE status = 'finished' AND highest_bidder = ? ORDER BY id DESC`, [clientId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
