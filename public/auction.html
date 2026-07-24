@@ -336,268 +336,206 @@
             letter-spacing: 0.02em;
         }
 
-        .bid-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            filter: grayscale(40%);
+        .bid-btn span.usd-amt {
+            font-size: 0.7em;
+            font-weight: 400;
+            opacity: 0.8;
+            margin-top: 4px;
         }
 
-        /* サブツリー（メニューモーダル）の拡張スタイル */
-        .submenu-section {
-            margin-bottom: 20px;
-            text-align: left;
+        .sidebar-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
 
-        .submenu-section label {
-            display: block;
-            font-size: 0.85em;
-            font-weight: 700;
-            color: var(--gold-primary);
-            margin-bottom: 8px;
+        .history-card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-height: 480px;
         }
 
-        .submenu-section select {
-            width: 100%;
-            padding: 10px;
-            background: #ffffff;
-            border: 1px solid rgba(184, 134, 11, 0.3);
-            border-radius: var(--radius-sm);
-            font-size: 0.95em;
-        }
-
-        .purchases-preview-list {
-            max-height: 180px;
+        .history-list {
+            flex: 1;
             overflow-y: auto;
-            background: #f8fafc;
-            border: 1px solid rgba(0,0,0,0.08);
-            border-radius: var(--radius-sm);
-            padding: 10px;
+            padding-right: 4px;
         }
 
-        .purchase-mini-item {
-            padding: 8px 0;
-            border-bottom: 1px solid #edf2f7;
-            font-size: 0.85em;
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 10px;
+            border-bottom: 1px dashed #e2e8f0;
+            font-size: 0.9em;
         }
+
+        .history-item.is-me {
+            background: rgba(16, 185, 129, 0.05);
+            border-left: 3px solid var(--emerald-green);
+        }
+
+        .history-bidder {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        .history-bidder.is-me {
+            color: var(--emerald-green);
+        }
+
+        .history-amount {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .loading-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(184, 134, 11, 0.2);
+            border-top-color: var(--gold-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
+
+    <div class="loading-screen" id="loading-screen">
+        <div class="spinner"></div>
+        <p style="color:var(--text-secondary); font-size:0.9em; letter-spacing:0.1em; text-transform:uppercase;">Loading Auction Hall...</p>
+    </div>
+
+    <!-- 画像拡大モーダル -->
+    <div id="image-zoom-modal" onclick="closeImageZoom()">
+        <img id="zoomed-image" src="" alt="Zoomed">
+    </div>
+
     <div class="auction-layout-container">
-        <!-- Top Bar -->
-        <div class="header-bar glass-panel">
+        <!-- ヘッダー -->
+        <div class="header-bar glass-panel animate-slide-up">
             <div class="client-badge">
-                <div class="client-avatar" id="client-avatar">VIP</div>
+                <div class="client-avatar" id="avatar-initial">C</div>
                 <div class="client-info-text">
-                    <span id="txt-welcome">Welcome</span>, <span class="client-info-id" id="client-id-display">--</span>
-                    <div id="client-name-display" style="font-size:0.8em; color:var(--text-muted);">---</div>
+                    Logged in as<br>
+                    <span class="client-info-id" id="display-client-name">---</span>
                 </div>
             </div>
-
             <div class="header-actions">
-                <button onclick="openSubMenuModal()" class="btn btn-gold" style="padding:6px 14px; font-size:0.8em;">
-                    <span id="txt-menu-btn">⚙️ メニュー / 設定</span>
-                </button>
-
                 <div class="currency-toggle">
-                    <button id="btn-usd" class="currency-btn active" onclick="setCurrency('USD')">USD ($)</button>
-                    <button id="btn-jpy" class="currency-btn" onclick="setCurrency('JPY')">JPY (¥)</button>
+                    <button class="currency-btn active" id="cur-jpy" onclick="setCurrency('JPY')">JPY</button>
+                    <button class="currency-btn" id="cur-usd" onclick="setCurrency('USD')">USD</button>
                 </div>
+                <button onclick="location.href='mypage.html'" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85em;">My Page</button>
             </div>
         </div>
 
-        <!-- 2 Column Main Grid -->
+        <!-- メイングリッド -->
         <div class="main-grid">
-            <!-- Left: Main Auction Card -->
-            <div class="auction-card glass-panel animate-fade-in">
-                <!-- 落札成功時の祝福UI -->
-                <div class="win-banner" id="win-banner">
-                    🎉 <span id="txt-win-congrats">あなたが落札できました！</span> 🎉
-                </div>
-
+            <!-- 左側：オークション商品エリア -->
+            <div class="auction-card glass-panel animate-fade-in" style="animation-delay: 0.1s;">
                 <div class="brand-header">
-                    <span class="brand-name" id="item-brand">---</span>
+                    <span class="badge badge-gold" id="brand-badge">---</span>
                 </div>
+                <h2 class="item-title font-serif" id="item-name">商品がありません</h2>
                 
-                <h2 class="item-title font-serif" id="item-code">商品コード: 読み込み中...</h2>
-
-                <div class="item-memo-box" id="item-memo-box" style="display: none;">
-                    <strong style="color:var(--gold-primary);">NOTE:</strong> <span id="item-memo-text"></span>
+                <div class="item-memo-box" id="item-memo-container" style="display: none;">
+                    <span id="item-memo-text"></span>
                 </div>
 
-                <!-- Image View with Zoom feature -->
-                <div class="image-container" id="main-image-container" onclick="openImageModal()">
-                    <p style="color: var(--text-muted);" id="txt-loading-img">画像読み込み中...</p>
+                <div class="image-container" id="main-image-container" onclick="openImageZoom()">
+                    <img src="images/placeholder.jpg" id="main-image" class="active" alt="商品画像">
+                    <div class="zoom-hint">🔍 Tap to Zoom</div>
                 </div>
-                <div class="thumbnails" id="thumbnails-container"></div>
+                <div class="thumbnails" id="thumbnail-container">
+                    <!-- サムネイルが動的に入る -->
+                </div>
 
-                <!-- Realtime Auction Status -->
+                <div id="win-banner" class="win-banner">
+                    🎉 CONGRATULATIONS! YOU WON THIS ITEM! 🎉
+                </div>
+
                 <div class="auction-status-bar">
                     <div class="status-box">
-                        <span class="status-label" id="txt-time-label">TIME REMAINING</span>
-                        <span class="timer-val" id="timer-display">--:--</span>
+                        <span class="status-label" id="timer-label">Time Left</span>
+                        <div class="timer-val" id="time-left">--:--</div>
                     </div>
                     <div class="status-box">
-                        <span class="status-label" id="txt-current-price-label">CURRENT BID</span>
-                        <span class="price-val" id="price-display">--</span>
+                        <span class="status-label" id="price-label">Current Bid</span>
+                        <div class="price-val" id="current-price">¥0</div>
+                        <div style="font-size: 0.8em; color: var(--text-muted); font-weight:600; margin-top:2px;" id="current-price-usd">($0)</div>
                     </div>
                 </div>
-
-                <!-- 残り5秒延長通知用バナー -->
-                <div class="extension-notice" id="extension-notice">
-                    ⚠️ 残り5秒未満での応札があったため、残り時間が5秒延長されました！
+                
+                <div id="extension-notice" class="extension-notice">
+                    ⏱ 終了直前の入札により、時間が5秒延長されました！
                 </div>
 
                 <div class="highest-bidder-box">
-                    <span id="txt-highest-bidder-label">HIGHEST BIDDER:</span>
-                    <span class="badge badge-gold" id="highest-bidder">---</span>
+                    <span>👑 Highest Bidder:</span>
+                    <span id="highest-bidder-id" style="color: var(--gold-primary); font-size: 1.1em;">---</span>
                 </div>
 
-                <!-- Bid Action Buttons -->
                 <div class="bid-buttons">
-                    <button id="bid-btn-1" class="btn btn-gold bid-btn" onclick="placeBid(step1)" disabled>
-                        <span>+ $10</span>
+                    <button class="btn btn-primary bid-btn" onclick="placeBid(1000)" id="btn-bid-1k">
+                        + ¥1,000
+                        <span class="usd-amt" id="usd-amt-1k"></span>
                     </button>
-                    <button id="bid-btn-2" class="btn btn-gold bid-btn" onclick="placeBid(step2)" disabled>
-                        <span>+ $100</span>
+                    <button class="btn btn-primary bid-btn" onclick="placeBid(5000)" id="btn-bid-5k">
+                        + ¥5,000
+                        <span class="usd-amt" id="usd-amt-5k"></span>
                     </button>
-                    <button id="bid-btn-3" class="btn btn-gold bid-btn" onclick="placeBid(step3)" disabled>
-                        <span>+ $1000</span>
+                    <button class="btn btn-gold bid-btn" onclick="placeBid(10000)" id="btn-bid-10k">
+                        + ¥10,000
+                        <span class="usd-amt" id="usd-amt-10k"></span>
                     </button>
                 </div>
             </div>
 
-            <!-- Right: Realtime Bid Feed -->
-            <div class="bid-feed-panel glass-panel animate-fade-in">
-                <div class="bid-feed-header">
-                    <h3 class="font-serif gold-text" style="font-size:1em;" id="txt-feed-title">LIVE BID FEED</h3>
-                    <span class="badge badge-emerald" id="txt-realtime-badge">REAL-TIME</span>
+            <!-- 右側：履歴エリア -->
+            <div class="sidebar-panel animate-fade-in" style="animation-delay: 0.2s;">
+                <div class="glass-panel history-card">
+                    <h3 class="font-serif" style="font-size: 1.1em; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px; color: var(--text-primary);">
+                        Bid History
+                    </h3>
+                    <div class="history-list" id="bid-history">
+                        <!-- 履歴がここに入る -->
+                    </div>
                 </div>
-                
-                <div class="bid-feed-list" id="bid-feed-list">
-                    <p style="color:var(--text-muted); font-size:0.85em; text-align:center; padding-top:20px;" id="txt-loading-bids">入札履歴を読み込み中...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 写真拡大用モーダル (Lightbox) -->
-    <div id="image-zoom-modal" onclick="closeImageModal()">
-        <img id="modal-zoomed-img" src="" alt="Zoomed Item Image">
-    </div>
-
-    <!-- サブツリー Modal (メニュー / 設定 / My Purchases / 多言語設定) -->
-    <div class="modal-overlay" id="submenu-modal">
-        <div class="modal-content glass-panel" style="max-width: 460px;">
-            <button class="modal-close-btn" onclick="closeSubMenuModal()">&times;</button>
-            <h3 class="font-serif gold-text" style="font-size:1.3em; margin-bottom:16px;" id="txt-modal-heading">📋 メニュー ＆ 設定</h3>
-
-            <!-- 多言語設定 サブツリー要素 -->
-            <div class="submenu-section">
-                <label id="txt-lang-heading">言語設定 (Language / Wika)</label>
-                <select id="lang-select" onchange="changeLanguage(this.value)">
-                    <option value="ja">日本語 (Japanese)</option>
-                    <option value="en">English (英語)</option>
-                    <option value="tl">Tagalog (タガログ語)</option>
-                </select>
-            </div>
-
-            <!-- My Purchases サブツリー要素 -->
-            <div class="submenu-section">
-                <label id="txt-purchases-heading">🏆 My Purchases (落札履歴)</label>
-                <div class="purchases-preview-list" id="purchases-preview-list">
-                    <p style="color:var(--text-muted); font-size:0.85em; text-align:center; padding:15px 0;">読み込み中...</p>
-                </div>
-            </div>
-
-            <div style="text-align: right; margin-top: 20px;">
-                <button onclick="closeSubMenuModal()" class="btn btn-gold" style="padding: 8px 20px; font-size: 0.9em;">閉じる</button>
             </div>
         </div>
     </div>
 
     <script>
         let currentClient = null;
-        let currentCurrency = 'USD';
+        let activeItemId = null;
         let exchangeRate = 150;
-        let currentItem = null;
-        let currentExpiresAt = null; // サーバー基準の終了タイムスタンプ
-        let timerInterval = null;
-        let currentLang = localStorage.getItem('auctionLang') || 'ja';
-
-        const step1 = 10;
-        const step2 = 100;
-        const step3 = 1000;
-
-        // 多言語辞書
-        const dict = {
-            ja: {
-                welcome: "Welcome",
-                menuBtn: "⚙️ メニュー / 設定",
-                winCongrats: "あなたが落札できました！",
-                loadingImg: "画像読み込み中...",
-                timeLabel: "TIME REMAINING",
-                currentPriceLabel: "CURRENT BID",
-                highestBidderLabel: "HIGHEST BIDDER:",
-                feedTitle: "LIVE BID FEED",
-                realtimeBadge: "REAL-TIME",
-                loadingBids: "入札履歴を読み込み中...",
-                modalHeading: "📋 メニュー ＆ 設定",
-                langHeading: "言語設定 (Language)",
-                purchasesHeading: "🏆 My Purchases (落札履歴)"
-            },
-            en: {
-                welcome: "Welcome",
-                menuBtn: "⚙️ Menu / Settings",
-                winCongrats: "You won this item!",
-                loadingImg: "Loading image...",
-                timeLabel: "TIME REMAINING",
-                currentPriceLabel: "CURRENT BID",
-                highestBidderLabel: "HIGHEST BIDDER:",
-                feedTitle: "LIVE BID FEED",
-                realtimeBadge: "REAL-TIME",
-                loadingBids: "Loading bid history...",
-                modalHeading: "📋 Menu & Settings",
-                langHeading: "Language Settings",
-                purchasesHeading: "🏆 My Purchases"
-            },
-            tl: {
-                welcome: "Mabuhay",
-                menuBtn: "⚙️ Menu / Settings",
-                winCongrats: "Ikaw ang nanalo sa item na ito!",
-                loadingImg: "Naglo-load ng imahe...",
-                timeLabel: "NATITIRANG ORAS",
-                currentPriceLabel: "KASALUKUYANG BID",
-                highestBidderLabel: "PINAKAMATAAS NA BIDDER:",
-                feedTitle: "LIVE BID FEED",
-                realtimeBadge: "REAL-TIME",
-                loadingBids: "Naglo-load ng kasaysayan ng bid...",
-                modalHeading: "📋 Menu at Settings",
-                langHeading: "Wika (Language)",
-                purchasesHeading: "🏆 Aking Mga Binili (My Purchases)"
-            }
+        let currentCurrency = 'JPY';
+        let currentBidPrice = 0;
+        let lastImages = [];
+        let timeRemainingInterval;
+        let targetEndTime = null;
+        
+        // テキスト多言語化（とりあえず英語ベース）
+        const texts = {
+            'JPY': { timer: 'Time Left', price: 'Current Bid', wait: 'Waiting for next item...' },
+            'USD': { timer: 'Time Left', price: 'Current Bid', wait: 'Waiting for next item...' }
         };
-
-        function updateTexts() {
-            const t = dict[currentLang] || dict.ja;
-            document.getElementById('txt-welcome').textContent = t.welcome;
-            document.getElementById('txt-menu-btn').textContent = t.menuBtn;
-            document.getElementById('txt-win-congrats').textContent = t.winCongrats;
-            document.getElementById('txt-time-label').textContent = t.timeLabel;
-            document.getElementById('txt-current-price-label').textContent = t.currentPriceLabel;
-            document.getElementById('txt-highest-bidder-label').textContent = t.highestBidderLabel;
-            document.getElementById('txt-feed-title').textContent = t.feedTitle;
-            document.getElementById('txt-realtime-badge').textContent = t.realtimeBadge;
-            document.getElementById('txt-modal-heading').textContent = t.modalHeading;
-            document.getElementById('txt-lang-heading').textContent = t.langHeading;
-            document.getElementById('txt-purchases-heading').textContent = t.purchasesHeading;
-            document.getElementById('lang-select').value = currentLang;
-        }
-
-        function changeLanguage(lang) {
-            currentLang = lang;
-            localStorage.setItem('auctionLang', lang);
-            updateTexts();
-        }
 
         const savedClient = localStorage.getItem('auctionClient');
         if (!savedClient) {
@@ -605,356 +543,24 @@
             location.href = 'index.html';
         } else {
             currentClient = JSON.parse(savedClient);
-            document.getElementById('client-id-display').textContent = currentClient.client_id;
-            document.getElementById('client-name-display').textContent = currentClient.client_name;
-            if (currentClient.client_id) {
-                document.getElementById('client-avatar').textContent = currentClient.client_id.replace('#', '').slice(0, 3);
-            }
+            const clientName = currentClient.client_name || currentClient.client_id || 'User';
+            document.getElementById('display-client-name').textContent = clientName;
+            document.getElementById('avatar-initial').textContent = clientName.charAt(0).toUpperCase();
         }
 
-        async function fetchSettings() {
-            try {
-                const res = await fetch('/api/settings');
-                const data = await res.json();
-                exchangeRate = Number(data.exchangeRate) || 150;
-                updateButtonLabels();
-                updatePriceDisplay();
-            } catch(e) {}
-        }
-
-        function setCurrency(curr) {
-            currentCurrency = curr;
-            document.getElementById('btn-jpy').classList.toggle('active', curr === 'JPY');
-            document.getElementById('btn-usd').classList.toggle('active', curr === 'USD');
-            updatePriceDisplay();
-            updateButtonLabels();
-            pollActiveBids();
-        }
-
-        function updateButtonLabels() {
-            const btn1 = document.getElementById('bid-btn-1');
-            const btn2 = document.getElementById('bid-btn-2');
-            const btn3 = document.getElementById('bid-btn-3');
-
-            if (currentCurrency === 'USD') {
-                btn1.innerHTML = `<span>+ $${step1}</span>`;
-                btn2.innerHTML = `<span>+ $${step2}</span>`;
-                btn3.innerHTML = `<span>+ $${step3}</span>`;
-            } else {
-                const yen1 = step1 * exchangeRate;
-                const yen2 = step2 * exchangeRate;
-                const yen3 = step3 * exchangeRate;
-                btn1.innerHTML = `<span>+ ¥${yen1.toLocaleString()}</span>`;
-                btn2.innerHTML = `<span>+ ¥${yen2.toLocaleString()}</span>`;
-                btn3.innerHTML = `<span>+ ¥${yen3.toLocaleString()}</span>`;
-            }
-        }
-
-        let lastItemId = null;
-
-        async function pollActiveItem() {
-            try {
-                await fetchSettings();
-                const res = await fetch('/api/items/active');
-                const data = await res.json();
-                
-                const item = data.item || data; 
-                const winBanner = document.getElementById('win-banner');
-
-                if (item && item.id && item.status === 'active') {
-                    if (lastItemId !== item.id) {
-                        lastItemId = item.id;
-                        currentExpiresAt = item.expires_at;
-                        knownBidIds.clear();
-                        document.getElementById('bid-feed-list').innerHTML = `<p style="color:var(--text-muted); font-size:0.85em; text-align:center; padding-top:20px;">${dict[currentLang].loadingBids}</p>`;
-                        startTimer();
-                    } else if (item.expires_at) {
-                        // 入札による延長などで終了時間が変わっている場合に同期
-                        if (Math.abs(currentExpiresAt - item.expires_at) > 1000) {
-                            currentExpiresAt = item.expires_at;
-                        }
-                    }
-
-                    document.getElementById('item-brand').textContent = item.brand || 'EXCLUSIVE ITEM';
-                    document.getElementById('item-code').textContent = `${item.item_code}`;
-                    
-                    const memoBox = document.getElementById('item-memo-box');
-                    if (item.item_memo && item.item_memo.trim() !== '') {
-                        document.getElementById('item-memo-text').textContent = item.item_memo;
-                        memoBox.style.display = 'block';
-                    } else {
-                        memoBox.style.display = 'none';
-                    }
-
-                    currentItem = item;
-                    updatePriceDisplay();
-                    document.getElementById('highest-bidder').textContent = item.highest_bidder || 'NONE';
-
-                    updateImages(item.image_urls || item.images);
-
-                    const clientIdToCheck = (typeof currentClient === 'string') ? currentClient : (currentClient.client_id || currentClient.clientId || currentClient.id);
-                    if (item.status === 'finished' && item.highest_bidder === clientIdToCheck) {
-                        winBanner.style.display = 'block';
-                    } else {
-                        winBanner.style.display = 'none';
-                    }
-                } else {
-                    currentItem = null;
-                    lastItemId = null;
-                    currentExpiresAt = null;
-                    document.getElementById('item-brand').textContent = 'EXHIBITION PAUSED';
-                    document.getElementById('item-code').textContent = '現在出品中の商品はありません';
-                    document.getElementById('item-memo-box').style.display = 'none';
-                    document.getElementById('price-display').textContent = '---';
-                    document.getElementById('highest-bidder').textContent = '---';
-                    document.getElementById('main-image-container').innerHTML = '<p style="color: var(--text-muted);">次回出品をお待ちください</p>';
-                    document.getElementById('thumbnails-container').innerHTML = '';
-                    document.getElementById('timer-display').textContent = '00:00';
-                    winBanner.style.display = 'none';
-                    setBiddingEnabled(false);
-                }
-            } catch(e) {}
-        }
-
-        let knownBidIds = new Set();
-
-        async function pollActiveBids() {
-            try {
-                const res = await fetch('/api/bids/active');
-                const bids = await res.json();
-                const listEl = document.getElementById('bid-feed-list');
-
-                if (!bids || bids.length === 0) {
-                    listEl.innerHTML = `<p style="color:var(--text-muted); font-size:0.85em; text-align:center; padding-top:20px;">${dict[currentLang].loadingBids}</p>`;
-                    return;
-                }
-
-                let html = '';
-                bids.forEach(b => {
-                    const isNew = !knownBidIds.has(b.id);
-                    knownBidIds.add(b.id);
-
-                    let priceText = '';
-                    if (currentCurrency === 'USD') {
-                        const usdVal = (b.amount / exchangeRate).toFixed(2);
-                        priceText = `$${Number(usdVal).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-                    } else {
-                        priceText = `¥${Number(b.amount).toLocaleString()}`;
-                    }
-
-                    const dateObj = new Date(b.created_at);
-                    const timeStr = isNaN(dateObj.getTime()) ? '' : dateObj.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-                    html += `
-                        <div class="bid-feed-item ${isNew ? 'new-bid' : ''}">
-                            <div>
-                                <div class="bid-user-id">${b.client_id}</div>
-                                <div class="bid-time">${timeStr}</div>
-                            </div>
-                            <div class="bid-amount-val">${priceText}</div>
-                        </div>
-                    `;
-                });
-
-                listEl.innerHTML = html;
-            } catch(e) {}
-        }
-
-        function updateImages(urlsJson) {
-            try {
-                const urls = (typeof urlsJson === 'string') ? JSON.parse(urlsJson || '[]') : (urlsJson || []);
-                const mainContainer = document.getElementById('main-image-container');
-                const thumbContainer = document.getElementById('thumbnails-container');
-                
-                if (urls.length === 0) {
-                    mainContainer.innerHTML = '<p style="color: var(--text-muted);">NO IMAGE AVAILABLE</p>';
-                    thumbContainer.innerHTML = '';
-                    return;
-                }
-
-                if (mainContainer.dataset.loadedIds !== urls.join(',')) {
-                    mainContainer.dataset.loadedIds = urls.join(',');
-                    mainContainer.innerHTML = '<div class="zoom-hint">🔍 クリックして拡大</div>';
-                    thumbContainer.innerHTML = '';
-
-                    urls.forEach((url, index) => {
-                        const img = document.createElement('img');
-                        img.src = url;
-                        if (index === 0) img.classList.add('active');
-                        img.id = `main-img-${index}`;
-                        mainContainer.appendChild(img);
-
-                        const thumb = document.createElement('img');
-                        thumb.src = url;
-                        if (index === 0) thumb.classList.add('selected');
-                        thumb.onclick = (e) => {
-                            e.stopPropagation();
-                            document.querySelectorAll('.image-container img').forEach(i => i.classList.remove('active'));
-                            document.querySelectorAll('.thumbnails img').forEach(t => t.classList.remove('selected'));
-                            img.classList.add('active');
-                            thumb.classList.add('selected');
-                        };
-                        thumbContainer.appendChild(thumb);
-                    });
-                }
-            } catch(e) {}
-        }
-
-        function openImageModal() {
-            const activeImg = document.querySelector('.image-container img.active');
-            if (!activeImg || !activeImg.src) return;
-            document.getElementById('modal-zoomed-img').src = activeImg.src;
-            document.getElementById('image-zoom-modal').style.display = 'flex';
-        }
-
-        function closeImageModal() {
-            document.getElementById('image-zoom-modal').style.display = 'none';
-        }
-
-        function updatePriceDisplay() {
-            if (!currentItem) return;
-            const currentBidYen = currentItem.current_bid || 0;
-            const displayEl = document.getElementById('price-display');
-
-            if (currentCurrency === 'USD') {
-                const usdVal = (currentBidYen / exchangeRate).toFixed(2);
-                displayEl.textContent = `$${Number(usdVal).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-            } else {
-                displayEl.textContent = `¥${currentBidYen.toLocaleString()}`;
-            }
-        }
-
-        function setBiddingEnabled(enabled) {
-            document.getElementById('bid-btn-1').disabled = !enabled;
-            document.getElementById('bid-btn-2').disabled = !enabled;
-            document.getElementById('bid-btn-3').disabled = !enabled;
-        }
-
-        // --- 修正：端末ごとの時間のズレを防ぐため、サーバー側の期限タイムスタンプ (expires_at) と現在時刻の差分から計算する方式 ---
-        function startTimer() {
-            if (timerInterval) clearInterval(timerInterval);
-            setBiddingEnabled(true);
-
-            timerInterval = setInterval(async () => {
-                const timerEl = document.getElementById('timer-display');
-                
-                if (!currentExpiresAt) {
-                    timerEl.textContent = '00:00';
-                    setBiddingEnabled(false);
-                    return;
-                }
-
-                // サーバー時間との差異を考慮した残りミリ秒
-                const remainingMs = currentExpiresAt - Date.now();
-                const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
-
-                const mins = Math.floor(remainingSeconds / 60);
-                const secs = remainingSeconds % 60;
-                timerEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-
-                if (remainingSeconds <= 0) {
-                    setBiddingEnabled(false);
-                    timerEl.textContent = '00:00';
-                    if (currentItem) {
-                        try {
-                            await fetch('/api/items/check-and-next', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ itemId: currentItem.id })
-                            });
-                        } catch(e) {}
-                    }
-                }
-            }, 200); // 0.2秒ごとにチェックすることで、端末による描画遅延やズレを完全に抑える
-        }
-
-        async function placeBid(amountUSD) {
-            if (!currentItem || (currentExpiresAt && Date.now() >= currentExpiresAt)) {
-                alert('アクティブな商品ではないか、すでに終了しています。');
-                return;
-            }
-
+        // ★修正: サーバーへ定期的にオンライン状態を通知する関数を追加
+        async function sendHeartbeat() {
+            if (!currentClient) return;
             const clientIdToSend = (typeof currentClient === 'string') 
                 ? currentClient 
                 : (currentClient.client_id || currentClient.clientId || currentClient.id);
 
-            if (!clientIdToSend) {
-                alert('クライアント情報が確認できません。再ログインしてください。');
-                return;
-            }
-
-            const amountYen = Math.round(amountUSD * exchangeRate);
-
             try {
-                const res = await fetch('/api/bid', {
+                await fetch('/api/heartbeat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        itemId: currentItem.id,
-                        amount: amountYen,
-                        clientId: clientIdToSend
-                    })
+                    body: JSON.stringify({ clientId: clientIdToSend })
                 });
-                const data = await res.json();
-                if (data.success) {
-                    currentItem.current_bid = data.currentBid;
-                    currentItem.highest_bidder = data.highest_bidder || data.highestBidder;
-                    if (data.newExpiresAt) {
-                        currentExpiresAt = data.newExpiresAt;
-                    }
-                    updatePriceDisplay();
-                    document.getElementById('highest-bidder').textContent = currentItem.highest_bidder;
-                    
-                    if (data.extended) {
-                        const notice = document.getElementById('extension-notice');
-                        notice.style.display = 'block';
-                        setTimeout(() => {
-                            notice.style.display = 'none';
-                        }, 4000);
-                    }
-
-                    pollActiveBids();
-                } else {
-                    alert(data.message || '入札に失敗しました。');
-                }
-            } catch (err) {
-                alert('通信エラーが発生しました。');
-            }
-        }
-
-        function openSubMenuModal() {
-            document.getElementById('submenu-modal').classList.add('active');
-            loadMyPurchases();
-        }
-
-        function closeSubMenuModal() {
-            document.getElementById('submenu-modal').classList.remove('active');
-        }
-
-        async function loadMyPurchases() {
-            if (!currentClient) return;
-            try {
-                const clientIdToSend = (typeof currentClient === 'string') ? currentClient : (currentClient.client_id || currentClient.clientId || currentClient.id);
-                const res = await fetch(`/api/my-purchases?clientId=${encodeURIComponent(clientIdToSend)}`);
-                const items = await res.json();
-                const listEl = document.getElementById('purchases-preview-list');
-
-                if (!items || items.length === 0) {
-                    listEl.innerHTML = '<p style="color:var(--text-muted); font-size:0.85em; text-align:center; padding:15px 0;">まだ落札した商品はありません。</p>';
-                    return;
-                }
-
-                let html = '';
-                items.forEach(item => {
-                    const usdVal = (item.current_bid / exchangeRate).toFixed(2);
-                    html += `
-                        <div class="purchase-mini-item">
-                            <div style="font-weight:700; color:var(--gold-primary);">${item.brand || ''} (${item.item_code})</div>
-                            <div>落札価格: $${Number(usdVal).toLocaleString('en-US', {minimumFractionDigits: 2})} (¥${Number(item.current_bid).toLocaleString()})</div>
-                        </div>
-                    `;
-                });
-                listEl.innerHTML = html;
             } catch(e) {}
         }
 
@@ -963,11 +569,311 @@
             await fetchSettings();
             pollActiveItem();
             pollActiveBids();
+            
+            // ★修正: 初回ハートビート送信と定期実行の設定
+            sendHeartbeat();
+            
             setInterval(pollActiveItem, 2000);
             setInterval(pollActiveBids, 2000);
+            setInterval(sendHeartbeat, 10000);
+
+            setTimeout(() => {
+                document.getElementById('loading-screen').style.opacity = '0';
+                setTimeout(() => document.getElementById('loading-screen').style.display = 'none', 300);
+            }, 800);
         }
 
-        init();
+        async function fetchSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                exchangeRate = Number(data.exchangeRate) || 150;
+                updateBidButtonUSD();
+            } catch(e) {}
+        }
+
+        function setCurrency(cur) {
+            currentCurrency = cur;
+            document.getElementById('cur-jpy').classList.remove('active');
+            document.getElementById('cur-usd').classList.remove('active');
+            document.getElementById(`cur-${cur.toLowerCase()}`).classList.add('active');
+            updateTexts();
+            updatePriceDisplay();
+        }
+
+        function updateTexts() {
+            document.getElementById('timer-label').textContent = texts[currentCurrency].timer;
+            document.getElementById('price-label').textContent = texts[currentCurrency].price;
+        }
+
+        function updateBidButtonUSD() {
+            document.getElementById('usd-amt-1k').textContent = `(Approx $${Math.floor(1000/exchangeRate)})`;
+            document.getElementById('usd-amt-5k').textContent = `(Approx $${Math.floor(5000/exchangeRate)})`;
+            document.getElementById('usd-amt-10k').textContent = `(Approx $${Math.floor(10000/exchangeRate)})`;
+        }
+
+        function openImageZoom() {
+            const mainImg = document.getElementById('main-image');
+            if(mainImg.src && !mainImg.src.includes('placeholder.jpg')) {
+                document.getElementById('zoomed-image').src = mainImg.src;
+                document.getElementById('image-zoom-modal').style.display = 'flex';
+            }
+        }
+        function closeImageZoom() {
+            document.getElementById('image-zoom-modal').style.display = 'none';
+        }
+
+        async function pollActiveItem() {
+            try {
+                const res = await fetch('/api/items/active');
+                const data = await res.json();
+                const item = data.item;
+                const serverTime = data.serverTime;
+
+                if (item) {
+                    // 商品切り替え時
+                    if (activeItemId !== item.id) {
+                        activeItemId = item.id;
+                        document.getElementById('brand-badge').textContent = item.brand || 'BRAND';
+                        document.getElementById('item-name').textContent = item.item_code || '---';
+                        
+                        if (item.item_memo) {
+                            document.getElementById('item-memo-container').style.display = 'block';
+                            document.getElementById('item-memo-text').textContent = item.item_memo;
+                        } else {
+                            document.getElementById('item-memo-container').style.display = 'none';
+                        }
+                        
+                        document.getElementById('win-banner').style.display = 'none';
+                        enableButtons(true);
+                        updateImages(item.image_urls);
+                    }
+
+                    // 時間延長の検知
+                    if (targetEndTime && item.expires_at > targetEndTime) {
+                        showExtensionNotice();
+                    }
+                    targetEndTime = item.expires_at;
+
+                    updateTimer(serverTime);
+
+                    currentBidPrice = item.current_bid || 0;
+                    updatePriceDisplay();
+
+                    const highestId = item.highest_bidder || '---';
+                    const clientId = typeof currentClient === 'string' ? currentClient : currentClient.client_id;
+                    const highestEl = document.getElementById('highest-bidder-id');
+                    
+                    if (highestId === clientId) {
+                        highestEl.textContent = 'YOU (Top Bidder)';
+                        highestEl.style.color = 'var(--emerald-green)';
+                    } else {
+                        highestEl.textContent = highestId;
+                        highestEl.style.color = 'var(--gold-primary)';
+                    }
+
+                } else {
+                    // アクティブ商品がない場合
+                    activeItemId = null;
+                    document.getElementById('brand-badge').textContent = 'WAITING';
+                    document.getElementById('item-name').textContent = texts[currentCurrency].wait;
+                    document.getElementById('item-memo-container').style.display = 'none';
+                    document.getElementById('time-left').textContent = '--:--';
+                    document.getElementById('current-price').textContent = '¥0';
+                    document.getElementById('current-price-usd').textContent = '($0)';
+                    document.getElementById('highest-bidder-id').textContent = '---';
+                    document.getElementById('win-banner').style.display = 'none';
+                    enableButtons(false);
+                    updateImages('[]');
+                }
+            } catch(e) {}
+        }
+
+        function showExtensionNotice() {
+            const notice = document.getElementById('extension-notice');
+            notice.style.display = 'block';
+            setTimeout(() => { notice.style.display = 'none'; }, 3000);
+        }
+
+        function updateTimer(serverTime) {
+            clearInterval(timeRemainingInterval);
+            
+            const renderTime = () => {
+                if (!targetEndTime) return;
+                let diff = Math.floor((targetEndTime - serverTime) / 1000);
+                serverTime += 1000; // ローカルで1秒進める
+                
+                if (diff <= 0) {
+                    document.getElementById('time-left').textContent = '00:00';
+                    document.getElementById('time-left').style.color = 'var(--text-muted)';
+                    enableButtons(false);
+                    checkAndNextItem();
+                    clearInterval(timeRemainingInterval);
+                    return;
+                }
+
+                if (diff <= 10) {
+                    document.getElementById('time-left').style.color = 'var(--rose-red)';
+                    document.getElementById('time-left').style.animation = 'pulse 1s infinite';
+                } else {
+                    document.getElementById('time-left').style.color = 'var(--text-primary)';
+                    document.getElementById('time-left').style.animation = 'none';
+                }
+
+                const m = String(Math.floor(diff / 60)).padStart(2, '0');
+                const s = String(diff % 60).padStart(2, '0');
+                document.getElementById('time-left').textContent = `${m}:${s}`;
+            };
+            
+            renderTime();
+            timeRemainingInterval = setInterval(renderTime, 1000);
+        }
+
+        async function checkAndNextItem() {
+            if (!activeItemId) return;
+            const res = await fetch('/api/items/check-and-next', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ itemId: activeItemId })
+            });
+            const data = await res.json();
+            
+            if (data.transitioned) {
+                // 落札者チェック
+                const highestId = document.getElementById('highest-bidder-id').textContent;
+                const clientIdStr = typeof currentClient === 'string' ? currentClient : currentClient.client_id;
+                
+                if (highestId.includes('YOU') || highestId === clientIdStr) {
+                    document.getElementById('win-banner').style.display = 'block';
+                }
+
+                setTimeout(() => {
+                    pollActiveItem();
+                    document.getElementById('bid-history').innerHTML = ''; // 履歴リセット
+                }, 3000); // 3秒後に次の商品へ
+            }
+        }
+
+        function enableButtons(enabled) {
+            const btns = document.querySelectorAll('.bid-btn');
+            btns.forEach(b => {
+                b.disabled = !enabled;
+                if(!enabled) {
+                    b.style.opacity = '0.5';
+                    b.style.cursor = 'not-allowed';
+                } else {
+                    b.style.opacity = '1';
+                    b.style.cursor = 'pointer';
+                }
+            });
+        }
+
+        function updatePriceDisplay() {
+            const jpyStr = '¥' + currentBidPrice.toLocaleString();
+            const usdVal = Math.floor(currentBidPrice / exchangeRate);
+            const usdStr = '($' + usdVal.toLocaleString() + ')';
+
+            if (currentCurrency === 'JPY') {
+                document.getElementById('current-price').textContent = jpyStr;
+                document.getElementById('current-price-usd').textContent = usdStr;
+            } else {
+                document.getElementById('current-price').textContent = '$' + usdVal.toLocaleString();
+                document.getElementById('current-price-usd').textContent = '(' + jpyStr + ')';
+            }
+        }
+
+        function updateImages(urlsJson) {
+            if (urlsJson === lastImages) return;
+            lastImages = urlsJson;
+            let urls = [];
+            try { urls = JSON.parse(urlsJson || '[]'); } catch(e) {}
+
+            const thumbContainer = document.getElementById('thumbnail-container');
+            const mainImg = document.getElementById('main-image');
+            thumbContainer.innerHTML = '';
+
+            if (urls.length === 0) {
+                mainImg.src = 'images/placeholder.jpg';
+                return;
+            }
+
+            mainImg.src = urls[0];
+            
+            urls.forEach((url, idx) => {
+                const img = document.createElement('img');
+                img.src = url;
+                if (idx === 0) img.classList.add('selected');
+                img.onclick = () => {
+                    mainImg.src = url;
+                    document.querySelectorAll('.thumbnails img').forEach(i => i.classList.remove('selected'));
+                    img.classList.add('selected');
+                };
+                thumbContainer.appendChild(img);
+            });
+        }
+
+        async function pollActiveBids() {
+            if (!activeItemId) return;
+            try {
+                const res = await fetch('/api/bids/active');
+                const bids = await res.json();
+                renderBids(bids);
+            } catch(e) {}
+        }
+
+        function renderBids(bids) {
+            const container = document.getElementById('bid-history');
+            container.innerHTML = '';
+            const clientIdStr = typeof currentClient === 'string' ? currentClient : currentClient.client_id;
+            
+            bids.forEach(b => {
+                const isMe = b.client_id === clientIdStr;
+                const div = document.createElement('div');
+                div.className = `history-item ${isMe ? 'is-me' : ''}`;
+                
+                const time = new Date(b.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                
+                div.innerHTML = `
+                    <div style="display:flex; flex-direction:column; gap:2px;">
+                        <span class="history-bidder ${isMe ? 'is-me' : ''}">${isMe ? 'YOU' : b.client_id}</span>
+                        <span style="font-size:0.7em; color:#94a3b8;">${time}</span>
+                    </div>
+                    <span class="history-amount">¥${b.amount.toLocaleString()}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function placeBid(amount) {
+            if (!activeItemId) return;
+            
+            const clientIdStr = typeof currentClient === 'string' ? currentClient : currentClient.client_id;
+            const res = await fetch('/api/bid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    itemId: activeItemId,
+                    amount: amount,
+                    clientId: clientIdStr
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                currentBidPrice = data.currentBid;
+                updatePriceDisplay();
+                pollActiveBids();
+                
+                // 延長処理の反映
+                if (data.extended) {
+                    targetEndTime = data.newExpiresAt;
+                    showExtensionNotice();
+                }
+            } else {
+                alert(data.message || '入札エラー');
+            }
+        }
+
+        window.onload = init;
     </script>
 </body>
 </html>
