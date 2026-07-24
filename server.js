@@ -313,7 +313,8 @@ app.get('/api/items/active', (req, res) => {
         res.json({
             item: row || null,
             serverTime: Date.now(),
-            onlineCount: Math.max(1, activeSessions.size) 
+            // 修正: Math.maxを外して、実際のアクセス数（0人も許可）を返すように変更
+            onlineCount: activeSessions.size 
         });
     });
 });
