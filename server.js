@@ -54,8 +54,12 @@ db.serialize(() => {
         highest_bidder TEXT DEFAULT '---',
         image_urls TEXT,
         timer_seconds INTEGER,
+        expires_at INTEGER,
         status TEXT DEFAULT 'pending'
     )`);
+
+    // 既存のテーブルに expires_at がない場合のマイグレーション用
+    db.run(`ALTER TABLE items ADD COLUMN expires_at INTEGER`, (err) => {});
 
     db.run(`CREATE TABLE IF NOT EXISTS bids (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,7 +98,7 @@ app.post('/api/login', (req, res) => {
         if (!row) return res.status(400).json({ success: false, message: '無効なクライアントIDです。' });
         if (row.password && row.password !== password) return res.status(400).json({ success: false, message: 'パスワードが間違っています。' });
 
-        const sessionToken = 'sess_' + Date.now + '_' + Math.random().toString(36).substring(2);
+        const sessionToken = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2);
         activeSessions.set(sessionToken, { clientId: row.client_id, lastSeen: Date.now() });
 
         res.json({ 
@@ -110,7 +114,6 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// 生存確認（ハートビート）とオンライン人数集計用エンドポイント
 app.post('/api/heartbeat', (req, res) => {
     const { sessionToken, clientId } = req.body;
     const key = sessionToken || clientId;
@@ -273,21 +276,22 @@ app.post('/api/items', upload.array('itemImages', 5), (req, res) => {
     const paths = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
     const imageUrlsStr = JSON.stringify(paths);
     const parsedStartPrice = Number(startPrice) || 0;
+    const tSec = Number(timerSeconds) || 180;
 
     db.get(`SELECT COUNT(*) as count FROM items WHERE status = 'active'`, [], (err, row) => {
         if (err) return res.status(500).json({ success: false, error: err.message });
         const status = (row && row.count === 0) ? 'active' : 'pending';
         const initialBid = (status === 'active') ? parsedStartPrice : 0;
+        const expiresAt = (status === 'active') ? Date.now() + (tSec * 1000) : null;
 
-        db.run(`INSERT INTO items (brand, item_code, item_memo, cost, start_price, current_bid, highest_bidder, image_urls, timer_seconds, status) VALUES (?, ?, ?, ?, ?, ?, '---', ?, ?, ?)`, 
-        [brand, itemCode, itemMemo, cost, parsedStartPrice, initialBid, imageUrlsStr, timerSeconds || 180, status], function(err) {
+        db.run(`INSERT INTO items (brand, item_code, item_memo, cost, start_price, current_bid, highest_bidder, image_urls, timer_seconds, expires_at, status) VALUES (?, ?, ?, ?, ?, ?, '---', ?, ?, ?, ?)`, 
+        [brand, itemCode, itemMemo, cost, parsedStartPrice, initialBid, imageUrlsStr, tSec, expiresAt, status], function(err) {
             if (err) return res.status(500).json({ success: false, error: err.message });
             res.json({ success: true, id: this.lastID });
         });
     });
 });
 
-// アクティブな商品と、実際のオンラインアクセス数（onlineCount）を返却
 app.get('/api/items/active', (req, res) => {
     const now = Date.now();
     for (let [token, data] of activeSessions.entries()) {
@@ -298,8 +302,17 @@ app.get('/api/items/active', (req, res) => {
 
     db.get(`SELECT * FROM items WHERE status = 'active' LIMIT 1`, [], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
+        
+        // アクティブな商品が存在するが、expires_atが設定されていない場合のフォールバック
+        if (row && !row.expires_at) {
+            const expiresAt = Date.now() + ((row.timer_seconds || 180) * 1000);
+            db.run(`UPDATE items SET expires_at = ? WHERE id = ?`, [expiresAt, row.id]);
+            row.expires_at = expiresAt;
+        }
+
         res.json({
             item: row || null,
+            serverTime: Date.now(),
             onlineCount: Math.max(1, activeSessions.size) 
         });
     });
@@ -308,9 +321,10 @@ app.get('/api/items/active', (req, res) => {
 app.post('/api/items/next', (req, res) => {
     db.serialize(() => {
         db.run(`UPDATE items SET status = 'finished' WHERE status = 'active'`);
-        db.get(`SELECT id, start_price FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, row) => {
+        db.get(`SELECT id, start_price, timer_seconds FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, row) => {
             if (row) {
-                db.run(`UPDATE items SET status = 'active', current_bid = COALESCE(NULLIF(current_bid, 0), start_price) WHERE id = ?`, [row.id], function(err) {
+                const expiresAt = Date.now() + ((row.timer_seconds || 180) * 1000);
+                db.run(`UPDATE items SET status = 'active', current_bid = COALESCE(NULLIF(current_bid, 0), start_price), expires_at = ? WHERE id = ?`, [expiresAt, row.id], function(err) {
                     res.json({ success: true, nextId: row.id });
                 });
             } else {
@@ -324,11 +338,13 @@ app.post('/api/items/check-and-next', (req, res) => {
     const { itemId } = req.body;
     db.get(`SELECT * FROM items WHERE id = ?`, [itemId], (err, item) => {
         if (err || !item) return res.json({ success: false });
-        if (item.status === 'active') {
+        // サーバー側でも時間が過ぎているか確認
+        if (item.status === 'active' && (!item.expires_at || Date.now() >= item.expires_at)) {
             db.run(`UPDATE items SET status = 'finished' WHERE id = ?`, [itemId], () => {
-                db.get(`SELECT id, start_price FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, nextRow) => {
+                db.get(`SELECT id, start_price, timer_seconds FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, nextRow) => {
                     if (nextRow) {
-                        db.run(`UPDATE items SET status = 'active', current_bid = COALESCE(NULLIF(current_bid, 0), start_price) WHERE id = ?`, [nextRow.id], () => {
+                        const expiresAt = Date.now() + ((nextRow.timer_seconds || 180) * 1000);
+                        db.run(`UPDATE items SET status = 'active', current_bid = COALESCE(NULLIF(current_bid, 0), start_price), expires_at = ? WHERE id = ?`, [expiresAt, nextRow.id], () => {
                             res.json({ success: true, transitioned: true, nextId: nextRow.id });
                         });
                     } else {
@@ -347,13 +363,36 @@ app.post('/api/bid', (req, res) => {
     db.get(`SELECT * FROM items WHERE id = ? AND status = 'active'`, [itemId], (err, item) => {
         if (err || !item) return res.status(500).json({ success: false, message: 'アクティブな商品ではありません。' });
 
+        // すでに時間が切れていないか確認
+        if (item.expires_at && Date.now() >= item.expires_at) {
+            return res.status(400).json({ success: false, message: 'この商品のオークションはすでに終了しています。' });
+        }
+
         const addAmount = Number(amount);
         const newBid = item.current_bid + addAmount;
-        db.run(`UPDATE items SET current_bid = ?, highest_bidder = ? WHERE id = ?`, [newBid, clientId, itemId], function(err) {
+        
+        let newExpiresAt = item.expires_at;
+        let extended = false;
+        
+        // 残り5秒未満（5000ミリ秒未満）での応札があれば5秒延長
+        const remainingMs = item.expires_at - Date.now();
+        if (remainingMs < 5000) {
+            newExpiresAt = item.expires_at + 5000;
+            extended = true;
+        }
+
+        db.run(`UPDATE items SET current_bid = ?, highest_bidder = ?, expires_at = ? WHERE id = ?`, [newBid, clientId, newExpiresAt, itemId], function(err) {
             if (err) return res.status(500).json({ success: false, message: err.message });
             db.run(`INSERT INTO bids (item_id, client_id, amount, created_at) VALUES (?, ?, ?, datetime('now', 'localtime'))`,
                 [itemId, clientId, newBid]);
-            res.json({ success: true, currentBid: newBid, highestBidder: clientId });
+            res.json({ 
+                success: true, 
+                currentBid: newBid, 
+                highest_bidder: clientId, 
+                highestBidder: clientId,
+                extended: extended,
+                newExpiresAt: newExpiresAt
+            });
         });
     });
 });
