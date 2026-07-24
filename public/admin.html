@@ -11,7 +11,6 @@
             margin: 0 auto;
             padding: 30px 20px 80px;
         }
-
         .dashboard-header {
             display: flex;
             justify-content: space-between;
@@ -20,30 +19,25 @@
             border-bottom: 1px solid #cbd5e1;
             padding-bottom: 16px;
         }
-
         .dashboard-title {
             font-size: 1.8em;
             font-weight: 800;
         }
-
         .dashboard-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 24px;
             margin-bottom: 28px;
         }
-
         @media (max-width: 768px) {
             .dashboard-grid {
                 grid-template-columns: 1fr;
             }
         }
-
         .panel {
             padding: 24px;
             margin-bottom: 28px;
         }
-
         .panel-header {
             display: flex;
             justify-content: space-between;
@@ -52,7 +46,6 @@
             padding-bottom: 10px;
             border-bottom: 1px solid #e2e8f0;
         }
-
         .history-input {
             width: 100% !important;
             min-width: 90px !important;
@@ -62,21 +55,17 @@
             border-radius: 4px !important;
             background: #ffffff !important;
             color: var(--text-primary) !important;
-            box-shadow: none !important;
             box-sizing: border-box !important;
         }
-
         .history-input:focus {
             border-color: var(--gold-primary) !important;
             box-shadow: 0 0 0 2px rgba(139, 101, 8, 0.2) !important;
         }
-
         .panel-title {
             font-size: 1.15em;
             font-weight: 700;
             color: #1e293b;
         }
-
         .active-monitor-card {
             background: #ffffff;
             border: 1px solid #cbd5e1;
@@ -85,7 +74,6 @@
             margin-bottom: 16px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.02);
         }
-
         .monitor-row {
             display: flex;
             justify-content: space-between;
@@ -93,33 +81,27 @@
             border-bottom: 1px dashed #e2e8f0;
             font-size: 0.9em;
         }
-
         .monitor-row:last-child {
             border-bottom: none;
         }
-
         .monitor-label {
             color: var(--text-secondary);
             font-weight: 600;
         }
-
         .monitor-val {
             font-weight: 700;
             color: var(--text-primary);
         }
-
         .form-row {
             display: flex;
             gap: 12px;
             margin-bottom: 14px;
             flex-wrap: wrap;
         }
-
         .form-field {
             flex: 1;
             min-width: 160px;
         }
-
         .form-field label {
             display: block;
             font-size: 0.78em;
@@ -129,7 +111,6 @@
             letter-spacing: 0.05em;
             font-weight: 700;
         }
-
         #login-overlay {
             position: fixed;
             top: 0;
@@ -143,14 +124,12 @@
             align-items: center;
             z-index: 9999;
         }
-
         .admin-login-box {
             width: 100%;
             max-width: 380px;
             padding: 40px 30px;
             text-align: center;
         }
-
         .lock-icon {
             width: 50px;
             height: 50px;
@@ -163,15 +142,33 @@
             justify-content: center;
             color: var(--gold-primary);
         }
-
         .lock-icon svg {
             width: 24px;
             height: 24px;
             fill: currentColor;
         }
-
         .filter-box {
             margin-bottom: 14px;
+        }
+        .thumb-preview-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+        .thumb-item {
+            position: relative;
+            width: 50px;
+            height: 50px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+        .thumb-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
     </style>
 </head>
@@ -226,14 +223,18 @@
                 </div>
             </div>
 
-            <!-- アクティブアイテムコントロール -->
+            <!-- アクティブアイテムコントロール ＆ リアルタイムアクセス数 -->
             <div class="panel glass-panel">
                 <div class="panel-header">
-                    <h3 class="panel-title font-serif">出品中アイテムのコントロール</h3>
+                    <h3 class="panel-title font-serif">出品中アイテム & アクセス状況</h3>
                     <span class="badge badge-emerald">LIVE MONITOR</span>
                 </div>
                 
                 <div class="active-monitor-card">
+                    <div class="monitor-row" style="background: rgba(139, 101, 8, 0.05); padding: 10px; border-radius: 4px; margin-bottom: 8px;">
+                        <span class="monitor-label" style="font-size: 1em;">👥 現在のオークションアクセス数</span>
+                        <span class="monitor-val" id="mon-online-users" style="color: var(--gold-primary); font-size: 1.2em;">0 人</span>
+                    </div>
                     <div class="monitor-row">
                         <span class="monitor-label">ブランド</span>
                         <span class="monitor-val" id="mon-item-brand" style="color:var(--gold-primary);">---</span>
@@ -315,10 +316,10 @@
             </form>
         </div>
 
-        <!-- 出品・落札履歴 (編集・修正可能) -->
+        <!-- 出品・落札履歴 (編集・写真変更・削除可能) -->
         <div class="panel glass-panel">
             <div class="panel-header">
-                <h3 class="panel-title font-serif">過去の出品＆落札履歴（編集・修正・削除可能）</h3>
+                <h3 class="panel-title font-serif">過去の出品＆落札履歴（データ・写真編集対応）</h3>
                 <button onclick="location.href='/api/items/export/csv'" class="btn btn-secondary" style="font-size:0.85em;">📥 CSV履歴ダウンロード (Excel)</button>
             </div>
             <div style="overflow-x: auto;">
@@ -329,11 +330,12 @@
                             <th style="min-width: 110px;">ブランド</th>
                             <th style="min-width: 120px;">商品コード</th>
                             <th style="min-width: 150px;">メモ</th>
-                            <th style="min-width: 120px;">原価(円)</th>
-                            <th style="min-width: 120px;">開始価格(円)</th>
-                            <th style="min-width: 130px;">落札/現在価格</th>
-                            <th style="min-width: 110px;">最高落札者</th>
-                            <th style="min-width: 100px;">ステータス</th>
+                            <th style="min-width: 140px;">写真編集・追加</th>
+                            <th style="min-width: 110px;">原価(円)</th>
+                            <th style="min-width: 110px;">開始価格(円)</th>
+                            <th style="min-width: 120px;">落札/現在価格</th>
+                            <th style="min-width: 100px;">最高落札者</th>
+                            <th style="min-width: 90px;">ステータス</th>
                             <th style="min-width: 115px;">操作</th>
                         </tr>
                     </thead>
@@ -369,12 +371,9 @@
                 <div class="panel-header">
                     <h3 class="panel-title font-serif">顧客マッピングリスト</h3>
                 </div>
-
-                <!-- リアルタイムフィルター検索入力欄 -->
                 <div class="filter-box">
                     <input type="text" id="client-search-input" placeholder="🔍 ID・名前・メモで検索..." oninput="filterClients()">
                 </div>
-
                 <div style="overflow-x: auto;">
                     <table class="custom-table">
                         <thead>
@@ -538,7 +537,14 @@
         async function loadActiveItem() {
             try {
                 const res = await fetch('/api/items/active');
-                const item = await res.json();
+                const data = await res.json();
+                
+                // アクセス数反映
+                if (data && typeof data.onlineCount !== 'undefined') {
+                    document.getElementById('mon-online-users').textContent = data.onlineCount + ' 人';
+                }
+
+                const item = data.item;
                 if (item && item.item_code) {
                     document.getElementById('mon-item-brand').textContent = item.brand || '---';
                     document.getElementById('mon-item-code').textContent = item.item_code;
@@ -566,12 +572,24 @@
                 const tbody = document.getElementById('history-table-body');
                 tbody.innerHTML = '';
                 items.forEach(i => {
+                    let imagesHtml = '';
+                    let imgList = [];
+                    try { imgList = JSON.parse(i.images || '[]'); } catch(e) {}
+                    
+                    imgList.forEach(img => {
+                        imagesHtml += `<div class="thumb-item"><img src="${img}"></div>`;
+                    });
+
                     tbody.innerHTML += `
                         <tr data-history-id="${i.id}">
                             <td><strong>${i.id}</strong></td>
                             <td><input type="text" id="edit-brand-${i.id}" value="${i.brand || ''}" class="history-input"></td>
                             <td><input type="text" id="edit-code-${i.id}" value="${i.item_code || ''}" class="history-input"></td>
                             <td><input type="text" id="edit-memo-${i.id}" value="${i.item_memo || ''}" class="history-input"></td>
+                            <td>
+                                <div class="thumb-preview-container">${imagesHtml}</div>
+                                <input type="file" id="edit-images-${i.id}" accept="image/*" multiple style="font-size:0.7em; margin-top:4px; width:130px;">
+                            </td>
                             <td><input type="number" id="edit-cost-${i.id}" value="${i.cost}" class="history-input"></td>
                             <td><input type="number" id="edit-start-${i.id}" value="${i.start_price || 0}" class="history-input"></td>
                             <td><input type="number" id="edit-bid-${i.id}" value="${i.current_bid || 0}" class="history-input" style="color:var(--emerald-green); font-weight:bold;"></td>
@@ -593,25 +611,30 @@
         }
 
         async function updateHistoryItem(id) {
-            const bodyData = {
-                brand: document.getElementById(`edit-brand-${id}`).value,
-                itemCode: document.getElementById(`edit-code-${id}`).value,
-                itemMemo: document.getElementById(`edit-memo-${id}`).value,
-                cost: document.getElementById(`edit-cost-${id}`).value,
-                startPrice: document.getElementById(`edit-start-${id}`).value,
-                currentBid: document.getElementById(`edit-bid-${id}`).value,
-                highestBidder: document.getElementById(`edit-bidder-${id}`).value,
-                status: document.getElementById(`edit-status-${id}`).value
-            };
+            const formData = new FormData();
+            formData.append('brand', document.getElementById(`edit-brand-${id}`).value);
+            formData.append('itemCode', document.getElementById(`edit-code-${id}`).value);
+            formData.append('itemMemo', document.getElementById(`edit-memo-${id}`).value);
+            formData.append('cost', document.getElementById(`edit-cost-${id}`).value);
+            formData.append('startPrice', document.getElementById(`edit-start-${id}`).value);
+            formData.append('currentBid', document.getElementById(`edit-bid-${id}`).value);
+            formData.append('highestBidder', document.getElementById(`edit-bidder-${id}`).value);
+            formData.append('status', document.getElementById(`edit-status-${id}`).value);
+
+            const fileInput = document.getElementById(`edit-images-${id}`);
+            if (fileInput && fileInput.files.length > 0) {
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append('itemImages', fileInput.files[i]);
+                }
+            }
 
             const res = await fetch(`/api/items/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bodyData)
+                body: formData
             });
             const data = await res.json();
             if (data.success) {
-                alert('出品・落札履歴を更新しました！');
+                alert('出品履歴・写真を更新しました！');
                 loadHistory();
                 loadActiveItem();
             } else {
