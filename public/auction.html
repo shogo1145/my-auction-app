@@ -451,11 +451,12 @@
                 </div>
             </div>
             <div class="header-actions">
+                <div class="lang-selector-container"></div>
                 <div class="currency-toggle">
                     <button class="currency-btn active" id="cur-jpy" onclick="setCurrency('JPY')">JPY</button>
                     <button class="currency-btn" id="cur-usd" onclick="setCurrency('USD')">USD</button>
                 </div>
-                <button onclick="location.href='mypage.html'" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85em;">My Page</button>
+                <button onclick="location.href='mypage.html'" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85em;" data-i18n="my_page_btn">My Page</button>
             </div>
         </div>
 
@@ -546,13 +547,15 @@
         let lastImages = [];
         let timeRemainingInterval;
         let targetEndTime = null;
+        let scheduledTimerInterval;
+        let scheduledTargetTime = null;
         
         const texts = {
             'JPY': { timer: 'Time Left', price: 'Current Bid', wait: '次の商品の出品をお待ちください' },
             'USD': { timer: 'Time Left', price: 'Current Bid', wait: 'Waiting for next item...' }
         };
 
-        const savedClient = localStorage.getItem('auctionClient');
+        const savedClient = sessionStorage.getItem('auctionClient');
         if (!savedClient) {
             alert('ログインしてください。');
             location.href = 'index.html';
@@ -682,11 +685,31 @@
                         highestEl.textContent = highestId;
                         highestEl.style.color = 'var(--gold-primary)';
                     }
+                    clearInterval(scheduledTimerInterval);
 
                 } else {
                     activeItemId = null;
-                    document.getElementById('brand-badge').textContent = 'WAITING';
-                    document.getElementById('item-name').textContent = texts[currentCurrency].wait;
+                    if (data.nextScheduled) {
+                        scheduledTargetTime = data.nextScheduled.scheduled_start_time;
+                        document.getElementById('brand-badge').textContent = 'SCHEDULED';
+                        document.getElementById('item-name').textContent = data.nextScheduled.item_code || 'NEXT ITEM';
+                        document.getElementById('waiting-placeholder').innerHTML = `
+                            <div class="waiting-icon">⏳</div>
+                            <p style="font-weight: 600; font-size: 0.95em; color: var(--gold-primary);">NEXT AUCTION: ${data.nextScheduled.brand || 'TBA'}</p>
+                            <p style="font-size: 1.5em; color: var(--rose-red); font-weight: bold; margin-top: 10px; font-family: var(--font-serif);" id="scheduled-countdown"></p>
+                        `;
+                        updateScheduledTimer(serverTime);
+                    } else {
+                        document.getElementById('brand-badge').textContent = 'WAITING';
+                        document.getElementById('item-name').textContent = texts[currentCurrency].wait;
+                        document.getElementById('waiting-placeholder').innerHTML = `
+                            <div class="waiting-icon">⏳</div>
+                            <p style="font-weight: 600; font-size: 0.95em; color: var(--gold-primary);">VIP PRIVATE AUCTION</p>
+                            <p style="font-size: 0.8em; color: var(--text-muted);">まもなく次のオークションが開始されます</p>
+                        `;
+                        clearInterval(scheduledTimerInterval);
+                    }
+                    
                     document.getElementById('item-memo-container').style.display = 'none';
                     document.getElementById('time-left').textContent = '--:--';
                     document.getElementById('current-price').textContent = '¥0';
@@ -743,6 +766,38 @@
             
             renderTime();
             timeRemainingInterval = setInterval(renderTime, 1000);
+        }
+
+        function updateScheduledTimer(serverTime) {
+            clearInterval(scheduledTimerInterval);
+            
+            const renderScheduledTime = () => {
+                if (!scheduledTargetTime) return;
+                let diff = Math.floor((scheduledTargetTime - serverTime) / 1000);
+                serverTime += 1000;
+                
+                const countdownEl = document.getElementById('scheduled-countdown');
+                if (!countdownEl) return;
+
+                if (diff <= 0) {
+                    countdownEl.textContent = 'Starting soon...';
+                    return;
+                }
+
+                const d = Math.floor(diff / (24 * 3600));
+                const h = String(Math.floor((diff % (24 * 3600)) / 3600)).padStart(2, '0');
+                const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+                const s = String(diff % 60).padStart(2, '0');
+                
+                if (d > 0) {
+                    countdownEl.textContent = `${d}d ${h}h ${m}m ${s}s`;
+                } else {
+                    countdownEl.textContent = `${h}:${m}:${s}`;
+                }
+            };
+            
+            renderScheduledTime();
+            scheduledTimerInterval = setInterval(renderScheduledTime, 1000);
         }
 
         async function checkAndNextItem() {
@@ -902,5 +957,7 @@
 
         window.onload = init;
     </script>
+    <script src="lang.js"></script>
+    <script src="security.js"></script>
 </body>
 </html>
