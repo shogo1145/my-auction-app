@@ -440,3 +440,46 @@ input:focus, select:focus, textarea:focus {
     margin-bottom: 10px;
     border: 1px solid #e2e8f0;
 }
+
+/* スマホ版（モバイル向け）追加スタイル */
+@media (max-width: 600px) {
+    .auction-layout-container, .admin-container, .container {
+        padding: 16px 10px 40px;
+    }
+    .header-bar {
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+    }
+    .client-badge {
+        justify-content: center;
+    }
+    .header-actions {
+        justify-content: space-between;
+        width: 100%;
+    }
+    .auction-card {
+        padding: 16px;
+    }
+    .image-container {
+        height: 240px;
+    }
+    .bid-buttons {
+        grid-template-columns: 1fr;
+    }
+    .timer-val {
+        font-size: 1.2em;
+    }
+    .price-val {
+        font-size: 1.5em;
+    }
+    .dashboard-grid, .purchases-grid {
+        grid-template-columns: 1fr;
+    }
+    .panel {
+        padding: 16px;
+    }
+    .login-card {
+        padding: 30px 20px;
+    }
+}
