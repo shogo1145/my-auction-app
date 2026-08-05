@@ -689,14 +689,19 @@
 
                 } else {
                     activeItemId = null;
-                    if (data.nextScheduled) {
-                        scheduledTargetTime = data.nextScheduled.scheduled_start_time;
+                    if (data.eventStartTime && data.eventStartTime > serverTime) {
+                        scheduledTargetTime = data.eventStartTime;
                         document.getElementById('brand-badge').textContent = 'SCHEDULED';
-                        document.getElementById('item-name').textContent = data.nextScheduled.item_code || 'NEXT ITEM';
+                        
+                        const nextBrand = data.nextItem ? data.nextItem.brand : 'TBA';
+                        const nextCode = data.nextItem ? data.nextItem.item_code : 'NEXT ITEM';
+                        
+                        document.getElementById('item-name').textContent = nextCode;
                         document.getElementById('waiting-placeholder').innerHTML = `
                             <div class="waiting-icon">⏳</div>
-                            <p style="font-weight: 600; font-size: 0.95em; color: var(--gold-primary);">NEXT AUCTION: ${data.nextScheduled.brand || 'TBA'}</p>
+                            <p style="font-weight: 600; font-size: 0.95em; color: var(--gold-primary);">EVENT STARTS IN</p>
                             <p style="font-size: 1.5em; color: var(--rose-red); font-weight: bold; margin-top: 10px; font-family: var(--font-serif);" id="scheduled-countdown"></p>
+                            <p style="font-size: 0.85em; color: var(--text-muted); margin-top: 5px;">First item: ${nextBrand}</p>
                         `;
                         updateScheduledTimer(serverTime);
                     } else {
