@@ -128,9 +128,12 @@
         <div class="header-bar glass-panel animate-slide-up">
             <div>
                 <span class="badge badge-gold">MY PAGE</span>
-                <h2 class="font-serif" style="margin-top: 4px; font-size: 1.2em;" id="client-name-display">落札履歴・購入商品一覧</h2>
+                <h2 class="font-serif" style="margin-top: 4px; font-size: 1.2em;" id="client-name-display" data-i18n="mypage_title">落札履歴・購入商品一覧</h2>
             </div>
-            <button onclick="location.href='auction.html'" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85em;">← オークション会場へ戻る</button>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <div class="lang-selector-container"></div>
+                <button onclick="location.href='auction.html'" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85em;" data-i18n="back_to_auction">← オークション会場へ戻る</button>
+            </div>
         </div>
 
         <div class="total-summary animate-fade-in">
@@ -157,7 +160,7 @@
         let currentClient = null;
 
         async function init() {
-            const saved = localStorage.getItem('auctionClient');
+            const saved = sessionStorage.getItem('auctionClient');
             if (!saved) {
                 alert('ログインしてください。');
                 location.href = 'index.html';
@@ -251,5 +254,7 @@
 
         window.onload = init;
     </script>
+    <script src="lang.js"></script>
+    <script src="security.js"></script>
 </body>
 </html>
