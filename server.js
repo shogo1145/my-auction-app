@@ -229,18 +229,32 @@ app.delete('/api/clients/:id', (req, res) => {
 });
 
 app.get('/api/settings', (req, res) => {
-    db.get(`SELECT value FROM settings WHERE key = 'exchange_rate'`, [], (err, row) => {
+    db.all(`SELECT key, value FROM settings WHERE key IN ('exchange_rate', 'event_start_time')`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ exchangeRate: row ? row.value : 150 });
+        let settings = { exchangeRate: 150, eventStartTime: null };
+        rows.forEach(r => {
+            if (r.key === 'exchange_rate') settings.exchangeRate = r.value;
+            if (r.key === 'event_start_time') settings.eventStartTime = parseInt(r.value);
+        });
+        res.json(settings);
     });
 });
 
 app.post('/api/settings', (req, res) => {
-    const { exchangeRate } = req.body;
-    db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('exchange_rate', ?)`, [exchangeRate], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
+    const { exchangeRate, eventStartTime } = req.body;
+    db.serialize(() => {
+        if (exchangeRate !== undefined) {
+            db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('exchange_rate', ?)`, [exchangeRate]);
+        }
+        if (eventStartTime !== undefined) {
+            if (eventStartTime === null) {
+                db.run(`DELETE FROM settings WHERE key = 'event_start_time'`);
+            } else {
+                db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('event_start_time', ?)`, [eventStartTime]);
+            }
+        }
     });
+    res.json({ success: true });
 });
 
 app.get('/api/items', (req, res) => {
@@ -251,9 +265,9 @@ app.get('/api/items', (req, res) => {
 });
 
 app.put('/api/items/:id', (req, res) => {
-    const { brand, itemCode, itemMemo, cost, startPrice, currentBid, highestBidder, status, scheduledStartTime } = req.body;
-    db.run(`UPDATE items SET brand = ?, item_code = ?, item_memo = ?, cost = ?, start_price = ?, current_bid = ?, highest_bidder = ?, status = ?, scheduled_start_time = ? WHERE id = ?`,
-        [brand, itemCode, itemMemo, Number(cost)||0, Number(startPrice)||0, Number(currentBid)||0, highestBidder, status, scheduledStartTime || null, req.params.id],
+    const { brand, itemCode, itemMemo, cost, startPrice, currentBid, highestBidder, status } = req.body;
+    db.run(`UPDATE items SET brand = ?, item_code = ?, item_memo = ?, cost = ?, start_price = ?, current_bid = ?, highest_bidder = ?, status = ? WHERE id = ?`,
+        [brand, itemCode, itemMemo, Number(cost)||0, Number(startPrice)||0, Number(currentBid)||0, highestBidder, status, req.params.id],
         function(err) {
             if (err) return res.status(500).json({ success: false, error: err.message });
             res.json({ success: true });
@@ -283,22 +297,20 @@ app.get('/api/items/export/csv', (req, res) => {
 });
 
 app.post('/api/items', upload.array('itemImages', 5), (req, res) => {
-    const { brand, itemCode, itemMemo, cost, startPrice, timerSeconds, scheduledStartTime } = req.body;
+    const { brand, itemCode, itemMemo, cost, startPrice, timerSeconds } = req.body;
     const paths = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
     const imageUrlsStr = JSON.stringify(paths);
     const parsedStartPrice = Number(startPrice) || 0;
     const tSec = Number(timerSeconds) || 180;
-    const sTime = scheduledStartTime ? Number(scheduledStartTime) : null;
 
     db.get(`SELECT COUNT(*) as count FROM items WHERE status = 'active'`, [], (err, row) => {
         if (err) return res.status(500).json({ success: false, error: err.message });
-        // If there's a scheduled time, it should start as pending.
-        const status = (row && row.count === 0 && !sTime) ? 'active' : 'pending';
-        const initialBid = (status === 'active') ? parsedStartPrice : 0;
-        const expiresAt = (status === 'active') ? Date.now() + (tSec * 1000) : null;
+        const status = 'pending';
+        const initialBid = 0;
+        const expiresAt = null;
 
-        db.run(`INSERT INTO items (brand, item_code, item_memo, cost, start_price, current_bid, highest_bidder, image_urls, timer_seconds, expires_at, scheduled_start_time, status) VALUES (?, ?, ?, ?, ?, ?, '---', ?, ?, ?, ?, ?)`, 
-        [brand, itemCode, itemMemo, cost, parsedStartPrice, initialBid, imageUrlsStr, tSec, expiresAt, sTime, status], function(err) {
+        db.run(`INSERT INTO items (brand, item_code, item_memo, cost, start_price, current_bid, highest_bidder, image_urls, timer_seconds, expires_at, status) VALUES (?, ?, ?, ?, ?, ?, '---', ?, ?, ?, ?)`, 
+        [brand, itemCode, itemMemo, cost, parsedStartPrice, initialBid, imageUrlsStr, tSec, expiresAt, status], function(err) {
             if (err) return res.status(500).json({ success: false, error: err.message });
             res.json({ success: true, id: this.lastID });
         });
@@ -313,22 +325,26 @@ app.get('/api/items/active', (req, res) => {
         }
     }
 
-    db.get(`SELECT * FROM items WHERE status = 'active' LIMIT 1`, [], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        if (row && !row.expires_at) {
-            const expiresAt = Date.now() + ((row.timer_seconds || 180) * 1000);
-            db.run(`UPDATE items SET expires_at = ? WHERE id = ?`, [expiresAt, row.id]);
-            row.expires_at = expiresAt;
-        }
+    db.get(`SELECT value FROM settings WHERE key = 'event_start_time'`, [], (err, setting) => {
+        const eventStartTime = setting ? parseInt(setting.value) : null;
 
-        // Also fetch the next scheduled item
-        db.get(`SELECT * FROM items WHERE status = 'pending' AND scheduled_start_time IS NOT NULL ORDER BY scheduled_start_time ASC LIMIT 1`, [], (err, nextScheduled) => {
-            res.json({
-                item: row || null,
-                nextScheduled: nextScheduled || null,
-                serverTime: Date.now(),
-                onlineCount: activeSessions.size 
+        db.get(`SELECT * FROM items WHERE status = 'active' LIMIT 1`, [], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            if (row && !row.expires_at) {
+                const expiresAt = Date.now() + ((row.timer_seconds || 180) * 1000);
+                db.run(`UPDATE items SET expires_at = ? WHERE id = ?`, [expiresAt, row.id]);
+                row.expires_at = expiresAt;
+            }
+
+            db.get(`SELECT * FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, nextItem) => {
+                res.json({
+                    item: row || null,
+                    eventStartTime: eventStartTime,
+                    nextItem: nextItem || null,
+                    serverTime: Date.now(),
+                    onlineCount: activeSessions.size 
+                });
             });
         });
     });
@@ -430,22 +446,44 @@ app.get('/api/my-purchases', (req, res) => {
     });
 });
 
-// 自動開始処理のポーリング
+// 自動開始・終了処理のポーリング
 setInterval(() => {
     const now = Date.now();
-    db.get(`SELECT * FROM items WHERE status = 'pending' AND scheduled_start_time <= ? ORDER BY scheduled_start_time ASC LIMIT 1`, [now], (err, scheduledItem) => {
-        if (err || !scheduledItem) return;
+    db.get(`SELECT value FROM settings WHERE key = 'event_start_time'`, [], (err, setting) => {
+        const eventStartTime = setting ? parseInt(setting.value) : null;
         
-        db.serialize(() => {
-            // 現在アクティブなものがあれば終了させる（強制切り替え）
-            db.run(`UPDATE items SET status = 'finished' WHERE status = 'active'`);
-            // 予定時間を過ぎたものをアクティブにする
-            const expiresAt = now + ((scheduledItem.timer_seconds || 180) * 1000);
-            db.run(`UPDATE items SET status = 'active', current_bid = COALESCE(NULLIF(current_bid, 0), start_price), expires_at = ?, scheduled_start_time = NULL WHERE id = ?`, 
-                [expiresAt, scheduledItem.id]);
+        if (eventStartTime && now < eventStartTime) {
+            // イベント開始前は何もしない
+            return;
+        }
+        
+        // イベントが開始されている（または未設定）場合
+        db.get(`SELECT * FROM items WHERE status = 'active' LIMIT 1`, [], (err, activeItem) => {
+            if (activeItem) {
+                // アクティブな商品が期限切れかチェック
+                if (activeItem.expires_at && now >= activeItem.expires_at) {
+                    db.serialize(() => {
+                        db.run(`UPDATE items SET status = 'finished' WHERE id = ?`, [activeItem.id]);
+                        startNextPendingItem(now);
+                    });
+                }
+            } else {
+                // アクティブな商品がない場合、次の保留中の商品を開始
+                startNextPendingItem(now);
+            }
         });
     });
 }, 5000);
+
+function startNextPendingItem(now) {
+    db.get(`SELECT * FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1`, [], (err, nextItem) => {
+        if (nextItem) {
+            const expiresAt = now + ((nextItem.timer_seconds || 180) * 1000);
+            db.run(`UPDATE items SET status = 'active', current_bid = COALESCE(NULLIF(current_bid, 0), start_price), expires_at = ? WHERE id = ?`, 
+                [expiresAt, nextItem.id]);
+        }
+    });
+}
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
