@@ -212,17 +212,28 @@
         </div>
 
         <div class="dashboard-grid">
-            <!-- 為替レート設定 -->
+            <!-- 設定（為替レート・イベント開始日時） -->
             <div class="panel glass-panel">
                 <div class="panel-header">
-                    <h3 class="panel-title font-serif" data-i18n="exchange_rate">為替レート設定 (USD / JPY)</h3>
+                    <h3 class="panel-title font-serif" data-i18n="exchange_rate">オークション環境設定</h3>
                 </div>
                 <p style="font-size:0.85em; color:var(--text-secondary); margin-bottom:14px;">1 USD あたりの日本円(JPY)換算レートを設定します。</p>
-                <div class="form-row" style="margin-bottom:0;">
+                <div class="form-row" style="margin-bottom:14px;">
                     <div class="form-field">
                         <input type="number" id="exchange-rate-input" placeholder="例: 150">
                     </div>
                     <button onclick="updateExchangeRate()" class="btn btn-success">レート保存</button>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 14px;">
+                
+                <p style="font-size:0.85em; color:var(--text-secondary); margin-bottom:14px;">オークションイベントの全体開始日時を設定します。この時間になると自動的に商品が開始されます。</p>
+                <div class="form-row" style="margin-bottom:0;">
+                    <div class="form-field">
+                        <input type="datetime-local" id="event-start-time-input">
+                    </div>
+                    <button onclick="updateEventStartTime()" class="btn btn-success">開始設定</button>
+                    <button onclick="clearEventStartTime()" class="btn btn-secondary">クリア</button>
                 </div>
             </div>
 
@@ -301,10 +312,6 @@
                         <input type="text" id="item-memo" placeholder="状態良好、ギャランティカード付属等">
                     </div>
                     <div class="form-field" style="flex:1;">
-                        <label>予定開始日時 (任意)</label>
-                        <input type="datetime-local" id="item-scheduled-time">
-                    </div>
-                    <div class="form-field" style="flex:1;">
                         <label>制限時間 (秒)</label>
                         <input type="number" id="item-timer" value="180">
                     </div>
@@ -340,7 +347,6 @@
                             <th style="min-width: 140px;">写真編集・追加</th>
                             <th style="min-width: 110px;">原価(円)</th>
                             <th style="min-width: 110px;">開始価格(円)</th>
-                            <th style="min-width: 130px;">予定開始日時</th>
                             <th style="min-width: 120px;">落札/現在価格</th>
                             <th style="min-width: 100px;">最高落札者</th>
                             <th style="min-width: 90px;">ステータス</th>
@@ -424,7 +430,15 @@
             try {
                 const res = await fetch('/api/settings');
                 const data = await res.json();
-                document.getElementById('exchange-rate-input').value = data.exchangeRate;
+                document.getElementById('exchange-rate-input').value = data.exchangeRate || 150;
+                
+                if (data.eventStartTime) {
+                    const d = new Date(data.eventStartTime);
+                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                    document.getElementById('event-start-time-input').value = d.toISOString().slice(0, 16);
+                } else {
+                    document.getElementById('event-start-time-input').value = '';
+                }
             } catch(e) {}
         }
 
@@ -436,6 +450,30 @@
                 body: JSON.stringify({ exchangeRate: rate })
             });
             if ((await res.json()).success) alert('為替レートを更新しました！');
+        }
+
+        async function updateEventStartTime() {
+            const stInput = document.getElementById('event-start-time-input').value;
+            if (!stInput) return;
+            const timestamp = new Date(stInput).getTime();
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ eventStartTime: timestamp })
+            });
+            if ((await res.json()).success) alert('イベント開催日時を設定しました！');
+        }
+
+        async function clearEventStartTime() {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ eventStartTime: null })
+            });
+            if ((await res.json()).success) {
+                document.getElementById('event-start-time-input').value = '';
+                alert('イベント開催日時をクリアしました。');
+            }
         }
 
         async function loadClients() {
@@ -520,11 +558,6 @@
             formData.append('cost', document.getElementById('item-cost').value);
             formData.append('startPrice', document.getElementById('item-start-price').value);
             formData.append('timerSeconds', document.getElementById('item-timer').value);
-            
-            const stInput = document.getElementById('item-scheduled-time').value;
-            if (stInput) {
-                formData.append('scheduledStartTime', new Date(stInput).getTime());
-            }
 
             const fileInput = document.getElementById('item-image-files');
             for (let i = 0; i < fileInput.files.length; i++) {
@@ -592,15 +625,6 @@
                     imgList.forEach(img => {
                         imagesHtml += `<div class="thumb-item"><img src="${img}"></div>`;
                     });
-
-                    let stVal = '';
-                    if (i.scheduled_start_time) {
-                        const d = new Date(i.scheduled_start_time);
-                        // format to YYYY-MM-DDThh:mm
-                        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                        stVal = d.toISOString().slice(0,16);
-                    }
-
                     tbody.innerHTML += `
                         <tr data-history-id="${i.id}">
                             <td><strong>${i.id}</strong></td>
@@ -613,7 +637,6 @@
                             </td>
                             <td><input type="number" id="edit-cost-${i.id}" value="${i.cost}" class="history-input"></td>
                             <td><input type="number" id="edit-start-${i.id}" value="${i.start_price || 0}" class="history-input"></td>
-                            <td><input type="datetime-local" id="edit-scheduled-${i.id}" value="${stVal}" class="history-input"></td>
                             <td><input type="number" id="edit-bid-${i.id}" value="${i.current_bid || 0}" class="history-input" style="color:var(--emerald-green); font-weight:bold;"></td>
                             <td><input type="text" id="edit-bidder-${i.id}" value="${i.highest_bidder || '---'}" class="history-input"></td>
                             <td>
@@ -642,13 +665,6 @@
             formData.append('currentBid', document.getElementById(`edit-bid-${id}`).value);
             formData.append('highestBidder', document.getElementById(`edit-bidder-${id}`).value);
             formData.append('status', document.getElementById(`edit-status-${id}`).value);
-            
-            const stEdit = document.getElementById(`edit-scheduled-${id}`).value;
-            if (stEdit) {
-                formData.append('scheduledStartTime', new Date(stEdit).getTime());
-            } else {
-                formData.append('scheduledStartTime', '');
-            }
 
             const fileInput = document.getElementById(`edit-images-${id}`);
             if (fileInput && fileInput.files.length > 0) {
