@@ -207,6 +207,7 @@
     </style>
 </head>
 <body>
+    <div style="position: absolute; top: 16px; right: 20px; z-index: 100;" class="lang-selector-container"></div>
     <div class="login-wrapper">
         <div class="login-card glass-panel animate-fade-in pulse-gold">
             <div class="brand-emblem">
@@ -215,34 +216,34 @@
                 </svg>
             </div>
             
-            <h2 class="login-title font-serif gold-text">PRIVATE AUCTION</h2>
-            <div class="login-subtitle">Exclusive Live Salon</div>
+            <h2 class="login-title font-serif gold-text" data-i18n="login_title">PRIVATE AUCTION</h2>
+            <div class="login-subtitle" data-i18n="login_subtitle">Exclusive Live Salon</div>
 
             <div id="error-msg" class="error-msg"></div>
             <div id="success-msg" class="success-msg"></div>
 
             <form id="login-form">
                 <div class="form-group">
-                    <label for="client-id">クライアントID</label>
+                    <label for="client-id" data-i18n="client_id">クライアントID</label>
                     <input type="text" id="client-id" placeholder="例: #C-501" required autocomplete="username">
                 </div>
                 
                 <div class="form-group">
-                    <label for="password">パスワード</label>
+                    <label for="password" data-i18n="password">パスワード</label>
                     <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
                 </div>
 
-                <button type="submit" class="btn btn-gold submit-btn">
+                <button type="submit" class="btn btn-gold submit-btn" data-i18n="login_btn">
                     <span>オークションに入室する</span>
                 </button>
 
-                <button type="button" class="alt-btn" id="open-first-setup-modal">
+                <button type="button" class="alt-btn" id="open-first-setup-modal" data-i18n="first_setup_btn">
                     <span>初回パスワードを設定する</span>
                 </button>
             </form>
 
             <div style="text-align: center;">
-                <span class="help-link" id="reset-password-link">パスワードを忘れた場合（合言葉で再設定）</span>
+                <span class="help-link" id="reset-password-link" data-i18n="reset_pass_link">パスワードを忘れた場合（合言葉で再設定）</span>
             </div>
 
             <div class="footer-note">
@@ -331,7 +332,7 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    localStorage.setItem('auctionClient', JSON.stringify(data.client));
+                    sessionStorage.setItem('auctionClient', JSON.stringify(data.client));
                     location.href = 'auction.html';
                 } else {
                     errorDiv.textContent = data.message || 'ログインに失敗しました。';
@@ -372,7 +373,7 @@
 
                 if (data.success) {
                     alert('パスワードと秘密の合言葉が正常に設定されました！');
-                    localStorage.setItem('auctionClient', JSON.stringify(data.client));
+                    sessionStorage.setItem('auctionClient', JSON.stringify(data.client));
                     location.href = 'auction.html';
                 } else {
                     modalError.textContent = data.message || '設定に失敗しました。';
@@ -430,5 +431,6 @@
             if (e.target === firstSetupModal) firstSetupModal.style.display = 'none';
         });
     </script>
+    <script src="lang.js"></script>
 </body>
 </html>
