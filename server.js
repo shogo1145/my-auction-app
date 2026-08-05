@@ -57,10 +57,12 @@ db.serialize(() => {
         image_urls TEXT,
         timer_seconds INTEGER,
         expires_at INTEGER,
+        scheduled_start_time INTEGER,
         status TEXT DEFAULT 'pending'
     )`);
 
     db.run(`ALTER TABLE items ADD COLUMN expires_at INTEGER`, (err) => {});
+    db.run(`ALTER TABLE items ADD COLUMN scheduled_start_time INTEGER`, (err) => {});
 
     db.run(`CREATE TABLE IF NOT EXISTS bids (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -249,9 +251,9 @@ app.get('/api/items', (req, res) => {
 });
 
 app.put('/api/items/:id', (req, res) => {
-    const { brand, itemCode, itemMemo, cost, startPrice, currentBid, highestBidder, status } = req.body;
-    db.run(`UPDATE items SET brand = ?, item_code = ?, item_memo = ?, cost = ?, start_price = ?, current_bid = ?, highest_bidder = ?, status = ? WHERE id = ?`,
-        [brand, itemCode, itemMemo, Number(cost)||0, Number(startPrice)||0, Number(currentBid)||0, highestBidder, status, req.params.id],
+    const { brand, itemCode, itemMemo, cost, startPrice, currentBid, highestBidder, status, scheduledStartTime } = req.body;
+    db.run(`UPDATE items SET brand = ?, item_code = ?, item_memo = ?, cost = ?, start_price = ?, current_bid = ?, highest_bidder = ?, status = ?, scheduled_start_time = ? WHERE id = ?`,
+        [brand, itemCode, itemMemo, Number(cost)||0, Number(startPrice)||0, Number(currentBid)||0, highestBidder, status, scheduledStartTime || null, req.params.id],
         function(err) {
             if (err) return res.status(500).json({ success: false, error: err.message });
             res.json({ success: true });
@@ -281,20 +283,22 @@ app.get('/api/items/export/csv', (req, res) => {
 });
 
 app.post('/api/items', upload.array('itemImages', 5), (req, res) => {
-    const { brand, itemCode, itemMemo, cost, startPrice, timerSeconds } = req.body;
+    const { brand, itemCode, itemMemo, cost, startPrice, timerSeconds, scheduledStartTime } = req.body;
     const paths = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
     const imageUrlsStr = JSON.stringify(paths);
     const parsedStartPrice = Number(startPrice) || 0;
     const tSec = Number(timerSeconds) || 180;
+    const sTime = scheduledStartTime ? Number(scheduledStartTime) : null;
 
     db.get(`SELECT COUNT(*) as count FROM items WHERE status = 'active'`, [], (err, row) => {
         if (err) return res.status(500).json({ success: false, error: err.message });
-        const status = (row && row.count === 0) ? 'active' : 'pending';
+        // If there's a scheduled time, it should start as pending.
+        const status = (row && row.count === 0 && !sTime) ? 'active' : 'pending';
         const initialBid = (status === 'active') ? parsedStartPrice : 0;
         const expiresAt = (status === 'active') ? Date.now() + (tSec * 1000) : null;
 
-        db.run(`INSERT INTO items (brand, item_code, item_memo, cost, start_price, current_bid, highest_bidder, image_urls, timer_seconds, expires_at, status) VALUES (?, ?, ?, ?, ?, ?, '---', ?, ?, ?, ?)`, 
-        [brand, itemCode, itemMemo, cost, parsedStartPrice, initialBid, imageUrlsStr, tSec, expiresAt, status], function(err) {
+        db.run(`INSERT INTO items (brand, item_code, item_memo, cost, start_price, current_bid, highest_bidder, image_urls, timer_seconds, expires_at, scheduled_start_time, status) VALUES (?, ?, ?, ?, ?, ?, '---', ?, ?, ?, ?, ?)`, 
+        [brand, itemCode, itemMemo, cost, parsedStartPrice, initialBid, imageUrlsStr, tSec, expiresAt, sTime, status], function(err) {
             if (err) return res.status(500).json({ success: false, error: err.message });
             res.json({ success: true, id: this.lastID });
         });
@@ -318,10 +322,14 @@ app.get('/api/items/active', (req, res) => {
             row.expires_at = expiresAt;
         }
 
-        res.json({
-            item: row || null,
-            serverTime: Date.now(),
-            onlineCount: activeSessions.size 
+        // Also fetch the next scheduled item
+        db.get(`SELECT * FROM items WHERE status = 'pending' AND scheduled_start_time IS NOT NULL ORDER BY scheduled_start_time ASC LIMIT 1`, [], (err, nextScheduled) => {
+            res.json({
+                item: row || null,
+                nextScheduled: nextScheduled || null,
+                serverTime: Date.now(),
+                onlineCount: activeSessions.size 
+            });
         });
     });
 });
@@ -421,6 +429,23 @@ app.get('/api/my-purchases', (req, res) => {
         res.json(rows);
     });
 });
+
+// 自動開始処理のポーリング
+setInterval(() => {
+    const now = Date.now();
+    db.get(`SELECT * FROM items WHERE status = 'pending' AND scheduled_start_time <= ? ORDER BY scheduled_start_time ASC LIMIT 1`, [now], (err, scheduledItem) => {
+        if (err || !scheduledItem) return;
+        
+        db.serialize(() => {
+            // 現在アクティブなものがあれば終了させる（強制切り替え）
+            db.run(`UPDATE items SET status = 'finished' WHERE status = 'active'`);
+            // 予定時間を過ぎたものをアクティブにする
+            const expiresAt = now + ((scheduledItem.timer_seconds || 180) * 1000);
+            db.run(`UPDATE items SET status = 'active', current_bid = COALESCE(NULLIF(current_bid, 0), start_price), expires_at = ?, scheduled_start_time = NULL WHERE id = ?`, 
+                [expiresAt, scheduledItem.id]);
+        });
+    });
+}, 5000);
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
