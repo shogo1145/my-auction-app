@@ -230,7 +230,14 @@
                 
                 <div class="form-group">
                     <label for="password" data-i18n="password">パスワード</label>
-                    <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+                    <div style="position: relative; display: flex; align-items: center;">
+                        <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password" style="padding-right: 40px; width: 100%;">
+                        <button type="button" id="toggle-password-btn" style="position: absolute; right: 10px; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; touch-action: manipulation;" aria-label="パスワードの表示切替">
+                            <svg id="eye-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <button type="submit" class="btn btn-gold submit-btn" data-i18n="login_btn">
@@ -268,7 +275,14 @@
                 </div>
                 <div class="form-group">
                     <label for="setup-password">新しいパスワード</label>
-                    <input type="password" id="setup-password" placeholder="設定したいパスワード" required>
+                    <div style="position: relative; display: flex; align-items: center;">
+                        <input type="password" id="setup-password" placeholder="設定したいパスワード" required style="padding-right: 40px; width: 100%;">
+                        <button type="button" id="toggle-setup-password-btn" style="position: absolute; right: 10px; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; touch-action: manipulation;" aria-label="パスワードの表示切替">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="setup-secret-word">秘密の合言葉</label>
@@ -430,6 +444,21 @@
             if (e.target === resetModal) resetModal.style.display = 'none';
             if (e.target === firstSetupModal) firstSetupModal.style.display = 'none';
         });
+
+        // パスワードの表示・非表示切り替えロジック
+        function setupPasswordToggle(btnId, inputId) {
+            const btn = document.getElementById(btnId);
+            const input = document.getElementById(inputId);
+            if (btn && input) {
+                btn.addEventListener('click', () => {
+                    const isPass = input.type === 'password';
+                    input.type = isPass ? 'text' : 'password';
+                    btn.style.color = isPass ? 'var(--gold-primary)' : 'var(--text-muted)';
+                });
+            }
+        }
+        setupPasswordToggle('toggle-password-btn', 'password');
+        setupPasswordToggle('toggle-setup-password-btn', 'setup-password');
     </script>
     <script src="lang.js"></script>
 </body>
