@@ -2,7 +2,9 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+// BIGINT (OID 20) を数値 (Number) としてパース
+types.setTypeParser(20, val => parseInt(val, 10));
 const ImageKit = require('imagekit');
 
 const app = express();
@@ -462,10 +464,14 @@ app.get('/api/items/active', async (req, res) => {
         const activeResult = await pool.query("SELECT * FROM items WHERE status = 'active' LIMIT 1");
         const row = activeResult.rows[0] || null;
 
-        if (row && !row.expires_at) {
-            const expiresAt = Date.now() + ((row.timer_seconds || 180) * 1000);
-            await pool.query('UPDATE items SET expires_at = $1 WHERE id = $2', [expiresAt, row.id]);
-            row.expires_at = expiresAt;
+        if (row) {
+            if (!row.expires_at) {
+                const expiresAt = Date.now() + ((row.timer_seconds || 180) * 1000);
+                await pool.query('UPDATE items SET expires_at = $1 WHERE id = $2', [expiresAt, row.id]);
+                row.expires_at = expiresAt;
+            } else {
+                row.expires_at = Number(row.expires_at);
+            }
         }
 
         const nextResult = await pool.query("SELECT * FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1");
@@ -512,7 +518,7 @@ app.post('/api/items/check-and-next', async (req, res) => {
         const itemResult = await pool.query('SELECT * FROM items WHERE id = $1', [itemId]);
         const item = itemResult.rows[0];
         
-        if (item && item.status === 'active' && (!item.expires_at || Date.now() >= item.expires_at)) {
+        if (item && item.status === 'active' && (!item.expires_at || Date.now() >= Number(item.expires_at))) {
             await pool.query("UPDATE items SET status = 'finished' WHERE id = $1", [itemId]);
             
             const nextResult = await pool.query("SELECT id, start_price, timer_seconds FROM items WHERE status = 'pending' ORDER BY id ASC LIMIT 1");
@@ -551,12 +557,13 @@ app.post('/api/bid', async (req, res) => {
         const addAmount = Number(amount);
         const newBid = Number(item.current_bid) + addAmount;
         
-        let newExpiresAt = item.expires_at;
+        const currentExpiresAt = Number(item.expires_at) || Date.now();
+        let newExpiresAt = currentExpiresAt;
         let extended = false;
         
-        const remainingMs = item.expires_at - Date.now();
+        const remainingMs = currentExpiresAt - Date.now();
         if (remainingMs < 5000) {
-            newExpiresAt = item.expires_at + 5000;
+            newExpiresAt = currentExpiresAt + 5000;
             extended = true;
         }
 
@@ -625,7 +632,7 @@ setInterval(async () => {
         const activeItem = activeResult.rows[0];
 
         if (activeItem) {
-            if (activeItem.expires_at && now >= activeItem.expires_at) {
+            if (activeItem.expires_at && now >= Number(activeItem.expires_at)) {
                 await pool.query("UPDATE items SET status = 'finished' WHERE id = $1", [activeItem.id]);
                 await startNextPendingItem(now);
             }
